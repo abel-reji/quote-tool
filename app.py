@@ -381,6 +381,8 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
 
     branch_id = str(data.get("branch_id", "")).strip()
     customer = str(data.get("customer", "")).strip()
+    customer_contact = str(data.get("customer_contact", "")).strip()
+    customer_email = str(data.get("customer_email", "")).strip()
     project_description = str(data.get("project_description", "")).strip()
     disposition = str(data.get("disposition", "pending")).strip().lower()
     line_items = data.get("line_items", [])
@@ -419,12 +421,13 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
         "branch_id": branch_id,
         "date_created": date_created,
         "customer": customer,
+        "customer_contact": customer_contact,
+        "customer_email": customer_email,
         "project_description": project_description,
         "disposition": disposition,
         "line_items": processed_line_items,
         "quote_total": quote_total,
     }
-
 
 def save_quote_json(quote_data: dict):
     quote_file = quote_file_path(quote_data["quote_number"])

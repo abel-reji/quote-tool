@@ -240,6 +240,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const payload = {
                 branch_id: document.getElementById("branchId").value,
                 customer: document.getElementById("customer").value.trim(),
+                customer_contact: document.getElementById("customerContact").value.trim(),
+                customer_email: document.getElementById("customerEmail").value.trim(),
                 project_description: document.getElementById("projectDescription").value.trim(),
                 disposition: selectedDisposition ? selectedDisposition.value : "pending",
                 line_items: lineItems

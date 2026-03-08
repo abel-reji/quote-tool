@@ -352,6 +352,16 @@ def build_quote_pdf(
         spaceAfter=0.5,
     )
 
+    attention_style = ParagraphStyle(
+        "AttentionStyle",
+        parent=normal_style,
+        fontName="Times-Roman",
+        fontSize=11,
+        leading=13,
+        spaceAfter=2,
+        alignment=TA_LEFT,
+    )
+
     doc = SimpleDocTemplate(
         str(pdf_path),
         pagesize=LETTER,
@@ -362,11 +372,20 @@ def build_quote_pdf(
     )
 
     story = []
-    story.append(Spacer(1, 0.62 * inch))
+    story.append(Spacer(1, 0.35 * inch))
+
+    attention_parts = []
+    if quote.get("customer_contact"):
+        attention_parts.append(str(quote["customer_contact"]))
+    if quote.get("customer_email"):
+        attention_parts.append(str(quote["customer_email"]))
+
+    attention_text = "<br/>".join(attention_parts) if attention_parts else ""
 
     customer_project_table = Table(
         [
             [Paragraph("<b>Customer:</b>", normal_style), Paragraph(quote["customer"], normal_style)],
+            [Paragraph("<b>Attention:</b>", normal_style), Paragraph(attention_text, attention_style)],
             [Paragraph("<b>Project:</b>", normal_style), Paragraph(quote["project_description"], normal_style)],
         ],
         colWidths=[1.05 * inch, 6.55 * inch],
