@@ -177,4 +177,4 @@ Planned enhancements include:
 
 ## Author
 
-**Abel Reji**\
+**Abel Reji**
