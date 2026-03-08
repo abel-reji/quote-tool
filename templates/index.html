@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if edit_mode %}Edit Quote{% else %}Quote Tool{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="page">
+            <header class="page-header">
+                <div>
+                    <div class="page-breadcrumbs">
+                        <a href="/">Home</a>
+                        <span>/</span>
+                        <span>{% if edit_mode %}Edit Quote{% else %}New Quote{% endif %}</span>
+                    </div>
+                    <h1>{% if edit_mode %}Edit Quote {{ quote.quote_number }}{% else %}Quoting Tool{% endif %}</h1>
+                    <p class="page-subtitle">
+                        {% if edit_mode %}
+                        Update quote details, revise line items, and regenerate the PDF.
+                        {% else %}
+                        Build customer quotes quickly, calculate pricing live, and generate a PDF in one step.
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="logo-container">
+                    <img src="{{ url_for('static', filename='img/dxp_logo.png') }}" alt="DXP Logo">
+                </div>
+            </header>
+
+            <div id="formMessage" class="form-message" hidden></div>
+
+            <form id="quoteForm">
+                <section class="panel quote-header">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Quote Details</h2>
+                            <p class="section-subtitle">Enter the basic information for this quote.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="branchId">Branch ID</label>
+                            <select id="branchId" name="branchId" required>
+                                <option value="325" {% if quote and quote.branch_id == '325' %}selected{% endif %}>325</option>
+                                <option value="190" {% if quote and quote.branch_id == '190' %}selected{% endif %}>190</option>
+                            </select>
+                        </div>
+
+                        <div class="field field-wide">
+                            <label for="customer">Customer</label>
+                            <input type="text" id="customer" name="customer" placeholder="Enter customer name" value="{{ quote.customer if quote else '' }}" required>
+                        </div>
+
+                        <div class="field field-full">
+                            <label for="projectDescription">Project Description</label>
+                            <input type="text" id="projectDescription" name="projectDescription" placeholder="Enter project or quote description" value="{{ quote.project_description if quote else '' }}" required>
+                        </div>
+                    </div>
+<div class="field field-full field-disposition">
+    <label>Disposition</label>
+    <div class="disposition-group">
+        <label class="disposition-option">
+            <input
+                type="radio"
+                name="disposition"
+                value="won"
+                {% if quote and (quote.disposition or 'pending') == 'won' %}checked{% endif %}
+            >
+            <span class="disposition-dot disposition-dot-won"></span>
+            <span>Won</span>
+        </label>
+
+        <label class="disposition-option">
+            <input
+                type="radio"
+                name="disposition"
+                value="pending"
+                {% if not quote or (quote.disposition or 'pending') == 'pending' %}checked{% endif %}
+            >
+            <span class="disposition-dot disposition-dot-pending"></span>
+            <span>Pending</span>
+        </label>
+
+        <label class="disposition-option">
+            <input
+                type="radio"
+                name="disposition"
+                value="lost"
+                {% if quote and (quote.disposition or 'pending') == 'lost' %}checked{% endif %}
+            >
+            <span class="disposition-dot disposition-dot-lost"></span>
+            <span>Lost</span>
+        </label>
+    </div>
+</div>
+                </section>
+
+                <section class="panel line-items-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Line Items</h2>
+                            <p class="section-subtitle">Add products, pricing, margins, and lead times.</p>
+                        </div>
+                        <button type="button" id="addLineItemBtn" class="secondary-btn">+ Add Line Item</button>
+                    </div>
+
+                    <div id="lineItemsContainer"></div>
+                </section>
+
+                <section class="quote-summary sticky-summary">
+                    <div class="summary-box">
+                        <div class="summary-label-group">
+                            <span class="summary-label">Quote Total</span>
+                            <span class="summary-note">Updates automatically as you edit line items</span>
+                        </div>
+                        <strong id="quoteTotal">$0.00</strong>
+                    </div>
+                </section>
+
+                <div class="form-actions">
+                    {% if edit_mode %}
+                    <button type="button" class="danger-btn" id="deleteQuoteBtn">
+                        Delete Quote
+                    </button>
+                    {% endif %}
+
+                    <button type="submit" class="primary-btn" id="saveQuoteBtn">
+                        {% if edit_mode %}Update Quote & Open PDF{% else %}Save Quote & Open PDF{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <template id="lineItemTemplate">
+        <div class="line-item">
+            <div class="line-item-top">
+                <div>
+                    <h3 class="line-item-title">Line Item</h3>
+                    <p class="line-item-subtitle">Product, pricing, and delivery information</p>
+                </div>
+                <button type="button" class="remove-line-item-btn">Remove</button>
+            </div>
+
+            <div class="line-item-grid">
+                <div class="field">
+                    <label>Item Name</label>
+                    <input type="text" class="item-name" placeholder="Pump, seal, motor, etc." required>
+                </div>
+
+                <div class="field field-wide">
+                    <label>Item Description</label>
+                    <input type="text" class="item-description" placeholder="Short description">
+                </div>
+
+                <div class="field field-full">
+                    <label>Item Long Description</label>
+                    <textarea class="item-long-description" rows="3" placeholder="Expanded scope, notes, configuration, materials, etc."></textarea>
+                </div>
+
+                <div class="field">
+                    <label>Quantity</label>
+                    <input type="number" class="quantity" min="1" step="1" value="1" required>
+                </div>
+
+                <div class="field">
+                    <label>Net Cost Each</label>
+                    <input type="number" class="net-cost" min="0" step="0.01" placeholder="0.00" required>
+                </div>
+
+                <div class="field">
+                    <label>Sell Price Each</label>
+                    <input type="number" class="sell-price" min="0" step="0.01" placeholder="0.00">
+                </div>
+
+                <div class="field">
+                    <label>Gross Margin %</label>
+                    <input type="number" class="gross-margin" min="0" step="0.01" placeholder="0.00">
+                </div>
+
+                <div class="field">
+                    <label>Lead Time</label>
+                    <input type="text" class="lead-time" placeholder="e.g. 6-8 weeks ARO">
+                </div>
+
+                <div class="field total-field">
+                    <label>Line Total</label>
+                    <input type="text" class="line-total-display" value="$0.00" readonly>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        window.quoteEditorConfig = {
+            editMode: {{ 'true' if edit_mode else 'false' }},
+            quote: {{ quote|tojson if quote else 'null' }}
+        };
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

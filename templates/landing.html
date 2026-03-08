@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quote Tool Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="page dashboard-page">
+            <header class="page-header dashboard-header">
+                <div>
+                    <h1>Quote Generator</h1>
+                    <p class="page-subtitle">
+                        Start a new quote, review saved quotes, or reopen any quote for editing.
+                    </p>
+                </div>
+                <div class="logo-container">
+                    <img src="{{ url_for('static', filename='img/dxp_logo.png') }}" alt="DXP Logo">
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <section class="panel dashboard-card action-card">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Create a New Quote</h2>
+                            <p class="section-subtitle">Open the quote form and generate a new PDF.</p>
+                        </div>
+                    </div>
+
+                    <div class="action-card-body">
+                        <p class="dashboard-copy">
+                            Start a fresh quote, add line items, calculate pricing, and save directly to the quote log.
+                        </p>
+                        <a href="/quote-tool" class="primary-button">
+    Open Quoting Tool
+</a>
+                    </div>
+                </section>
+
+                <section class="panel dashboard-card list-card">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Saved Quotes</h2>
+                            <p class="section-subtitle">Click any quote to reopen it and edit line items.</p>
+                        </div>
+                        <a class="secondary-btn button-link" href="/export/quote-log">Export CSV</a>
+                    </div>
+
+                    <div class="quote-list-toolbar">
+                        <input type="text" id="quoteSearch" placeholder="Search by quote #, customer, or project">
+                    </div>
+
+                    <div id="quoteListState" class="dashboard-copy">Loading quotes...</div>
+                    <div id="quoteList" class="quote-list" hidden></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", async () => {
+            const listEl = document.getElementById("quoteList");
+            const stateEl = document.getElementById("quoteListState");
+            const searchEl = document.getElementById("quoteSearch");
+            let quotes = [];
+
+            function formatCurrency(value) {
+                const number = Number(value || 0);
+                return `$${number.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+            }
+
+            function renderQuotes(items) {
+                if (!items.length) {
+                    listEl.hidden = true;
+                    stateEl.hidden = false;
+                    stateEl.textContent = "No quotes found.";
+                    return;
+                }
+
+                stateEl.hidden = true;
+                listEl.hidden = false;
+                listEl.innerHTML = items.map((quote) => `
+                    <a class="quote-list-item" href="${quote.edit_url}">
+                        <div class="quote-list-main">
+                            <div class="quote-list-title-row"><span class="quote-disposition-marker disposition-${quote.disposition || "pending"}" title="${(quote.disposition || "pending").charAt(0).toUpperCase() + (quote.disposition || "pending").slice(1)}"></span><strong>${quote.quote_number}</strong></div>
+                            <span>${quote.customer || "No customer"}</span>
+                            <span>${quote.project_description || "No project description"}</span>
+                        </div>
+                        <div class="quote-list-meta">
+                            <span>${quote.date_created || ""}</span>
+                            <strong>${formatCurrency(quote.quote_total)}</strong>
+                            <span>${quote.line_item_count} line item${quote.line_item_count === 1 ? "" : "s"}</span>
+                        </div>
+                    </a>
+                `).join("");
+            }
+
+            function applySearch() {
+                const term = searchEl.value.trim().toLowerCase();
+                if (!term) {
+                    renderQuotes(quotes);
+                    return;
+                }
+
+                const filtered = quotes.filter((quote) => {
+                    return [quote.quote_number, quote.customer, quote.project_description]
+                        .filter(Boolean)
+                        .some((value) => value.toLowerCase().includes(term));
+                });
+
+                renderQuotes(filtered);
+            }
+
+            searchEl.addEventListener("input", applySearch);
+
+            try {
+                const response = await fetch("/api/quotes");
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || "Unable to load quotes.");
+                }
+
+                quotes = result.quotes || [];
+                renderQuotes(quotes);
+            } catch (error) {
+                stateEl.hidden = false;
+                listEl.hidden = true;
+                stateEl.textContent = error.message || "Unable to load quotes.";
+            }
+        });
+    </script>
+</body>
+</html>

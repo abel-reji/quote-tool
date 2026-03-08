@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Flask / local files
+output/
+data/quotes/
+data/quote_log.csv
+data/customers.json
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
