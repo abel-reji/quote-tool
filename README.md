@@ -166,12 +166,10 @@ This allows easy export or integration with spreadsheets.
 Planned enhancements include:
 
 -   Compile application to standalone **EXE**
--   Multi-user support
--   Cloud storage for quotes
--   Customer database integration
+-   Dashboard metrics on landing page
+-   Uploads container in quoting process
 -   Quote template customization
--   Inventory or ERP integration
--   Email quote delivery
+
 
 ------------------------------------------------------------------------
 
