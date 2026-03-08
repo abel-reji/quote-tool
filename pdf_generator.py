@@ -64,8 +64,8 @@ def draw_page_header(canvas, doc, logo_path: Path | None = None):
 
     if logo_path and logo_path.exists():
         try:
-            desired_width = 1.55 * inch
-            max_height = 0.55 * inch
+            desired_width = 2.6 * inch
+            max_height = 0.9 * inch
             img_width, img_height = 500, 200
             aspect = img_height / img_width
             draw_width = desired_width
@@ -78,7 +78,7 @@ def draw_page_header(canvas, doc, logo_path: Path | None = None):
             canvas.drawImage(
                 str(logo_path),
                 doc.leftMargin,
-                page_height - 0.93 * inch,
+                page_height - 1.08 * inch,
                 width=draw_width,
                 height=draw_height,
                 preserveAspectRatio=True,

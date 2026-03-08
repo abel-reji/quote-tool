@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 import csv
+import re
 
 from pdf_generator import build_quote_pdf
 
@@ -156,16 +157,40 @@ def safe_int(value, default=0):
         return default
 
 
-def generate_quote_number(branch_id: str) -> str:
-    today = datetime.now()
-    date_code = today.strftime("%y%m%d")
+def get_sales_engineer_initials(settings: dict) -> str:
+    name = str(settings.get("user", {}).get("sales_engineer_name", "")).strip()
 
-    existing_count = 0
-    for _ in QUOTES_DIR.glob(f"{branch_id}-{date_code}*AR.json"):
-        existing_count += 1
+    if not name:
+        return "XX"
 
-    daily_sequence = existing_count + 1
-    return f"{branch_id}-{date_code}{daily_sequence}AR"
+    parts = [part for part in name.split() if part]
+    if len(parts) == 1:
+        return parts[0][0].upper()
+
+    return f"{parts[0][0]}{parts[-1][0]}".upper()
+
+
+def generate_quote_number(branch_id: str, settings: dict) -> str:
+    date_code = datetime.now().strftime("%y%m%d")
+    initials = get_sales_engineer_initials(settings)
+
+    pattern = re.compile(
+        rf"^{re.escape(branch_id)}-{date_code}(\d+){re.escape(initials)}$",
+        re.IGNORECASE,
+    )
+
+    max_sequence = 0
+
+    for quote_file in QUOTES_DIR.glob("*.json"):
+        quote_number = quote_file.stem
+        match = pattern.match(quote_number)
+        if match:
+            sequence = int(match.group(1))
+            if sequence > max_sequence:
+                max_sequence = sequence
+
+    daily_sequence = max_sequence + 1
+    return f"{branch_id}-{date_code}{daily_sequence}{initials}"
 
 
 def calculate_line_item(item: dict) -> dict:
@@ -386,7 +411,7 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
         quote_number = existing_quote_number
         date_created = existing_quote.get("date_created") or datetime.now().strftime("%Y-%m-%d")
     else:
-        quote_number = generate_quote_number(branch_id)
+        quote_number = generate_quote_number(branch_id, settings)
         date_created = datetime.now().strftime("%Y-%m-%d")
 
     return {
