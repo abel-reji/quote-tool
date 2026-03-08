@@ -19,12 +19,16 @@ user and branch settings.
 -   Margin or sell‑price based quoting
 -   Automatic quote number generation
 
+<img width="3039" height="1643" alt="image" src="https://github.com/user-attachments/assets/df43492f-433e-442b-ad01-972290274f80" />
+
 ### PDF Generation
 
 -   Professionally formatted PDF output
 -   Company branding
 -   Configurable closing and signature block
 -   Branch‑specific footer information
+
+<img width="1118" height="1452" alt="image" src="https://github.com/user-attachments/assets/a20812ee-ab18-44a2-8e63-cd0029465a0e" />
 
 ### Quote Management
 
@@ -40,6 +44,8 @@ user and branch settings.
     -   Pending
 -   Export quote log to CSV
 
+<img width="3036" height="1639" alt="image" src="https://github.com/user-attachments/assets/82b93c7b-b4e3-49d1-b62c-7f9ec6bd0514" />
+
 ### Settings Management
 
 Centralized settings page allows configuration of:
@@ -52,6 +58,8 @@ to add new branches
 
 **Quote Defaults** - Default cover page language - Quote validity text -
 Default signature block
+
+<img width="3036" height="1641" alt="image" src="https://github.com/user-attachments/assets/5f700feb-e048-4fa8-b0cf-bb1ec617d950" />
 
 ------------------------------------------------------------------------
 
