@@ -13,18 +13,102 @@ DATA_DIR = BASE_DIR / "data"
 QUOTES_DIR = DATA_DIR / "quotes"
 CUSTOMERS_FILE = DATA_DIR / "customers.json"
 QUOTE_LOG_FILE = DATA_DIR / "quote_log.csv"
+SETTINGS_FILE = DATA_DIR / "settings.json"
 OUTPUT_DIR = BASE_DIR / "output"
-ASSETS_DIR = BASE_DIR / "assets"
-LOGO_FILE = ASSETS_DIR / "dxp_logo.png"
-
-SALES_ENGINEER_NAME = "Abel Reji"
-SALES_ENGINEER_PHONE = "(918) 703-7381"
-SALES_ENGINEER_EMAIL = "Abel.Reji@dxpe.com"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 QUOTES_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+DEFAULT_SETTINGS = {
+    "user": {
+        "sales_engineer_name": "Abel Reji",
+        "sales_engineer_phone": "(918) 703-7381",
+        "sales_engineer_email": "Abel.Reji@dxpe.com",
+        "default_branch_id": "325",
+    },
+    "branches": [
+        {
+            "branch_id": "325",
+            "branch_name": "Tulsa",
+            "address": "4951 S. Frontage Road",
+            "city": "Tulsa",
+            "state": "OK",
+            "zip": "74107",
+            "phone": "918-446-5515",
+            "fax": "918-446-0338",
+            "tagline": "INNOVATIVE PUMPING SOLUTIONS • SUPPLY CHAIN SERVICES • SERVICE CENTERS",
+        },
+        {
+            "branch_id": "190",
+            "branch_name": "Oklahoma City",
+            "address": "1401 SE 29th St",
+            "city": "Oklahoma City",
+            "state": "OK",
+            "zip": "73129",
+            "phone": "405-670-4491",
+            "fax": "405-670-2702",
+            "tagline": "INNOVATIVE PUMPING SOLUTIONS • SUPPLY CHAIN SERVICES • SERVICE CENTERS",
+        },
+    ],
+    "quotes": {
+        "default_cover_info_text": (
+            "DXP is pleased to offer you the following quote. "
+            "Should you require additional information or if we can be of further service, "
+            "please contact us at your convenience."
+        ),
+        "default_quote_validity": (
+            "Customer to approve rated design point, materials of construction, and NPSH requirements. "
+            "Quote is valid for 30 days."
+        ),
+        "default_signature_lines": [
+            "Thank you for the opportunity,",
+            "",
+            "Abel Reji",
+            "Sales Engineer",
+            "918-703-7381",
+            "Abel.Reji@dxpe.com",
+        ],
+    },
+}
+
+
+def deep_merge(defaults, incoming):
+    if isinstance(defaults, dict) and isinstance(incoming, dict):
+        merged = dict(defaults)
+        for key, value in incoming.items():
+            if key in merged:
+                merged[key] = deep_merge(merged[key], value)
+            else:
+                merged[key] = value
+        return merged
+    return incoming
+
+
+def ensure_settings_file():
+    if not SETTINGS_FILE.exists():
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(DEFAULT_SETTINGS, f, indent=2)
+
+
+def load_settings() -> dict:
+    ensure_settings_file()
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        return deep_merge(DEFAULT_SETTINGS, loaded)
+    except (OSError, json.JSONDecodeError):
+        return DEFAULT_SETTINGS.copy()
+
+
+def save_settings(settings: dict):
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(settings, f, indent=2)
+
+
+def get_branch_ids(settings: dict) -> set[str]:
+    return {str(branch.get("branch_id", "")).strip() for branch in settings.get("branches", []) if branch.get("branch_id")}
 
 
 @app.route("/")
@@ -34,7 +118,8 @@ def landing_page():
 
 @app.route("/quote-tool")
 def quote_tool():
-    return render_template("index.html", edit_mode=False, quote=None)
+    settings = load_settings()
+    return render_template("index.html", edit_mode=False, quote=None, settings=settings)
 
 
 @app.route("/quotes/<quote_number>/edit")
@@ -43,7 +128,14 @@ def edit_quote_page(quote_number):
     if not quote:
         return f"Quote file not found: {quote_number}", 404
 
-    return render_template("index.html", edit_mode=True, quote=quote)
+    settings = load_settings()
+    return render_template("index.html", edit_mode=True, quote=quote, settings=settings)
+
+
+@app.route("/settings")
+def settings_page():
+    settings = load_settings()
+    return render_template("settings.html", settings=settings)
 
 
 def safe_float(value, default=0.0):
@@ -125,7 +217,7 @@ def ensure_quote_log_exists():
                 "Customer",
                 "ProjectDescription",
                 "QuoteTotal",
-                "Disposition"
+                "Disposition",
             ])
 
 
@@ -187,6 +279,7 @@ def update_quote_log(quote_data: dict):
         writer.writeheader()
         writer.writerows(rows)
 
+
 def delete_quote_log_entry(quote_number: str):
     ensure_quote_log_exists()
 
@@ -210,6 +303,7 @@ def delete_quote_log_entry(quote_number: str):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+
 
 def load_customers() -> list:
     if not CUSTOMERS_FILE.exists():
@@ -258,14 +352,17 @@ def load_quote(quote_number: str):
 
 
 def build_quote_payload(data: dict, existing_quote_number: str | None = None) -> dict:
+    settings = load_settings()
+
     branch_id = str(data.get("branch_id", "")).strip()
     customer = str(data.get("customer", "")).strip()
     project_description = str(data.get("project_description", "")).strip()
-    line_items_in = data.get("line_items", [])
-    disposition = str(data.get("disposition", "pending")).strip().lower() or "pending"
+    disposition = str(data.get("disposition", "pending")).strip().lower()
+    line_items = data.get("line_items", [])
 
-    if branch_id not in {"325", "190"}:
-        raise ValueError("Invalid branch ID.")
+    valid_branch_ids = get_branch_ids(settings)
+    if branch_id not in valid_branch_ids:
+        raise ValueError("A valid branch ID is required.")
 
     if not customer:
         raise ValueError("Customer is required.")
@@ -273,13 +370,13 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
     if not project_description:
         raise ValueError("Project description is required.")
 
-    if not line_items_in:
+    if disposition not in {"won", "lost", "pending"}:
+        disposition = "pending"
+
+    if not isinstance(line_items, list) or len(line_items) == 0:
         raise ValueError("At least one line item is required.")
 
-    if disposition not in {"won", "lost", "pending"}:
-        raise ValueError("Invalid disposition.")
-
-    processed_line_items = [calculate_line_item(item) for item in line_items_in]
+    processed_line_items = [calculate_line_item(item) for item in line_items]
     quote_total = round(sum(item["line_total"] for item in processed_line_items), 2)
 
     if existing_quote_number:
@@ -309,6 +406,7 @@ def save_quote_json(quote_data: dict):
     with open(quote_file, "w", encoding="utf-8") as f:
         json.dump(quote_data, f, indent=2)
 
+
 def get_export_rows() -> list[dict]:
     rows = []
 
@@ -331,6 +429,90 @@ def get_export_rows() -> list[dict]:
     rows.sort(key=lambda row: (row.get("Date Created", ""), row.get("Quote Number", "")), reverse=True)
     return rows
 
+
+@app.route("/api/settings", methods=["GET"])
+def get_settings():
+    return jsonify({"status": "success", "settings": load_settings()})
+
+
+@app.route("/api/settings", methods=["POST"])
+def update_settings():
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"status": "error", "message": "No JSON payload received."}), 400
+
+        user = data.get("user", {})
+        branches = data.get("branches", [])
+        quotes = data.get("quotes", {})
+
+        if not isinstance(user, dict):
+            return jsonify({"status": "error", "message": "Invalid user settings."}), 400
+
+        if not isinstance(branches, list) or len(branches) == 0:
+            return jsonify({"status": "error", "message": "At least one branch is required."}), 400
+
+        if not isinstance(quotes, dict):
+            return jsonify({"status": "error", "message": "Invalid quote settings."}), 400
+
+        cleaned_branches = []
+        seen_branch_ids = set()
+
+        for index, branch in enumerate(branches, start=1):
+            if not isinstance(branch, dict):
+                return jsonify({"status": "error", "message": f"Branch #{index} is invalid."}), 400
+
+            branch_id = str(branch.get("branch_id", "")).strip()
+            if not branch_id:
+                return jsonify({"status": "error", "message": f"Branch #{index}: Branch ID is required."}), 400
+
+            if branch_id in seen_branch_ids:
+                return jsonify({"status": "error", "message": f"Duplicate branch ID found: {branch_id}"}), 400
+
+            seen_branch_ids.add(branch_id)
+
+            cleaned_branches.append({
+                "branch_id": branch_id,
+                "branch_name": str(branch.get("branch_name", "")).strip(),
+                "address": str(branch.get("address", "")).strip(),
+                "city": str(branch.get("city", "")).strip(),
+                "state": str(branch.get("state", "")).strip(),
+                "zip": str(branch.get("zip", "")).strip(),
+                "phone": str(branch.get("phone", "")).strip(),
+                "fax": str(branch.get("fax", "")).strip(),
+                "tagline": str(branch.get("tagline", "")).strip(),
+            })
+
+        default_branch_id = str(user.get("default_branch_id", "")).strip()
+        if default_branch_id not in seen_branch_ids:
+            return jsonify({"status": "error", "message": "Default branch must match one of the configured branches."}), 400
+
+        signature_lines = quotes.get("default_signature_lines", [])
+        if isinstance(signature_lines, str):
+            signature_lines = [line.rstrip() for line in signature_lines.splitlines()]
+        elif not isinstance(signature_lines, list):
+            signature_lines = []
+
+        cleaned_settings = {
+            "user": {
+                "sales_engineer_name": str(user.get("sales_engineer_name", "")).strip(),
+                "sales_engineer_phone": str(user.get("sales_engineer_phone", "")).strip(),
+                "sales_engineer_email": str(user.get("sales_engineer_email", "")).strip(),
+                "default_branch_id": default_branch_id,
+            },
+            "branches": cleaned_branches,
+            "quotes": {
+                "default_cover_info_text": str(quotes.get("default_cover_info_text", "")).strip(),
+                "default_quote_validity": str(quotes.get("default_quote_validity", "")).strip(),
+                "default_signature_lines": signature_lines,
+            },
+        }
+
+        save_settings(cleaned_settings)
+        return jsonify({"status": "success", "message": "Settings saved successfully."})
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
 
 @app.route("/api/quotes", methods=["GET"])
@@ -413,10 +595,8 @@ def save_quote():
         })
 
     except ValueError as e:
-        print(f"ValueError in save_quote: {e}")
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
-        print(f"Unexpected error in save_quote: {e}")
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
 
@@ -445,10 +625,8 @@ def update_quote(quote_number):
         })
 
     except ValueError as e:
-        print(f"ValueError in update_quote: {e}")
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
-        print(f"Unexpected error in update_quote: {e}")
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
 
@@ -456,19 +634,16 @@ def update_quote(quote_number):
 def generate_pdf(quote_number):
     try:
         quote = load_quote(quote_number)
-
         if not quote:
             return f"Quote file not found: {quote_number}", 404
 
+        settings = load_settings()
         pdf_path = OUTPUT_DIR / f"{quote_number}.pdf"
 
         build_quote_pdf(
             quote=quote,
             pdf_path=pdf_path,
-            logo_path=LOGO_FILE,
-            sales_engineer_name=SALES_ENGINEER_NAME,
-            sales_engineer_phone=SALES_ENGINEER_PHONE,
-            sales_engineer_email=SALES_ENGINEER_EMAIL,
+            settings=settings,
         )
 
         return send_file(pdf_path, as_attachment=False)
@@ -480,30 +655,6 @@ def generate_pdf(quote_number):
         return f"PDF generation failed: {str(e)}", 500
 
 
-@app.route("/delete-quote/<quote_number>", methods=["DELETE"])
-def delete_quote(quote_number):
-    try:
-        quote_file = quote_file_path(quote_number)
-
-        if not quote_file.exists():
-            return jsonify({"status": "error", "message": "Quote not found."}), 404
-
-        quote_file.unlink()
-        delete_quote_log_entry(quote_number)
-
-        pdf_path = OUTPUT_DIR / f"{quote_number}.pdf"
-        if pdf_path.exists():
-            pdf_path.unlink()
-
-        return jsonify({
-            "status": "success",
-            "message": f"Quote {quote_number} deleted successfully.",
-        })
-
-    except Exception as e:
-        print(f"Unexpected error in delete_quote: {e}")
-        return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
-
-
 if __name__ == "__main__":
-    app.run(debug=False, use_reloader=False)
+    ensure_settings_file()
+    app.run(debug=True, use_reloader=False)

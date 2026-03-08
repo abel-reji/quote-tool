@@ -45,8 +45,18 @@
                         <div class="field">
                             <label for="branchId">Branch ID</label>
                             <select id="branchId" name="branchId" required>
-                                <option value="325" {% if quote and quote.branch_id == '325' %}selected{% endif %}>325</option>
-                                <option value="190" {% if quote and quote.branch_id == '190' %}selected{% endif %}>190</option>
+                                {% for branch in settings.branches %}
+                                <option
+                                    value="{{ branch.branch_id }}"
+                                    {% if quote and quote.branch_id == branch.branch_id %}
+                                        selected
+                                    {% elif not quote and settings.user.default_branch_id == branch.branch_id %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ branch.branch_id }}{% if branch.branch_name %} - {{ branch.branch_name }}{% endif %}
+                                </option>
+                                {% endfor %}
                             </select>
                         </div>
 
@@ -59,44 +69,26 @@
                             <label for="projectDescription">Project Description</label>
                             <input type="text" id="projectDescription" name="projectDescription" placeholder="Enter project or quote description" value="{{ quote.project_description if quote else '' }}" required>
                         </div>
+
+                        <div class="field field-full disposition-field">
+                            <label>Disposition</label>
+                            {% set current_disposition = quote.disposition if quote and quote.disposition else 'pending' %}
+                            <div class="radio-group disposition-radio-group">
+                                <label class="radio-pill">
+                                    <input type="radio" name="disposition" value="pending" {% if current_disposition == 'pending' %}checked{% endif %}>
+                                    <span>Pending</span>
+                                </label>
+                                <label class="radio-pill">
+                                    <input type="radio" name="disposition" value="won" {% if current_disposition == 'won' %}checked{% endif %}>
+                                    <span>Won</span>
+                                </label>
+                                <label class="radio-pill">
+                                    <input type="radio" name="disposition" value="lost" {% if current_disposition == 'lost' %}checked{% endif %}>
+                                    <span>Lost</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
-<div class="field field-full field-disposition">
-    <label>Disposition</label>
-    <div class="disposition-group">
-        <label class="disposition-option">
-            <input
-                type="radio"
-                name="disposition"
-                value="won"
-                {% if quote and (quote.disposition or 'pending') == 'won' %}checked{% endif %}
-            >
-            <span class="disposition-dot disposition-dot-won"></span>
-            <span>Won</span>
-        </label>
-
-        <label class="disposition-option">
-            <input
-                type="radio"
-                name="disposition"
-                value="pending"
-                {% if not quote or (quote.disposition or 'pending') == 'pending' %}checked{% endif %}
-            >
-            <span class="disposition-dot disposition-dot-pending"></span>
-            <span>Pending</span>
-        </label>
-
-        <label class="disposition-option">
-            <input
-                type="radio"
-                name="disposition"
-                value="lost"
-                {% if quote and (quote.disposition or 'pending') == 'lost' %}checked{% endif %}
-            >
-            <span class="disposition-dot disposition-dot-lost"></span>
-            <span>Lost</span>
-        </label>
-    </div>
-</div>
                 </section>
 
                 <section class="panel line-items-section">
@@ -122,12 +114,6 @@
                 </section>
 
                 <div class="form-actions">
-                    {% if edit_mode %}
-                    <button type="button" class="danger-btn" id="deleteQuoteBtn">
-                        Delete Quote
-                    </button>
-                    {% endif %}
-
                     <button type="submit" class="primary-btn" id="saveQuoteBtn">
                         {% if edit_mode %}Update Quote & Open PDF{% else %}Save Quote & Open PDF{% endif %}
                     </button>

@@ -1,0 +1,44 @@
+{
+  "user": {
+    "sales_engineer_name": "Abel Reji",
+    "sales_engineer_phone": "(918) 703-7381",
+    "sales_engineer_email": "Abel.Reji@dxpe.com",
+    "default_branch_id": "325"
+  },
+  "branches": [
+    {
+      "branch_id": "325",
+      "branch_name": "Tulsa",
+      "address": "4951 S. Frontage Road",
+      "city": "Tulsa",
+      "state": "OK",
+      "zip": "74107",
+      "phone": "918-446-5515",
+      "fax": "918-446-0338",
+      "tagline": "INNOVATIVE PUMPING SOLUTIONS \u2022 SUPPLY CHAIN SERVICES \u2022 SERVICE CENTERS"
+    },
+    {
+      "branch_id": "190",
+      "branch_name": "Oklahoma City",
+      "address": "1401 SE 29th St",
+      "city": "Oklahoma City",
+      "state": "OK",
+      "zip": "73129",
+      "phone": "405-670-4491",
+      "fax": "405-670-2702",
+      "tagline": "INNOVATIVE PUMPING SOLUTIONS \u2022 SUPPLY CHAIN SERVICES \u2022 SERVICE CENTERS"
+    }
+  ],
+  "quotes": {
+    "default_cover_info_text": "DXP is pleased to offer you the following quote. Should you require additional information or if we can be of further service, please contact us at your convenience.",
+    "default_quote_validity": "Customer to approve rated design point, materials of construction, and NPSH requirements. Quote is valid for 30 days.",
+    "default_signature_lines": [
+      "Thank you for the opportunity,",
+      "",
+      "Abel Reji",
+      "Sales Engineer",
+      "918-703-7381",
+      "Abel.Reji@dxpe.com"
+    ]
+  }
+}

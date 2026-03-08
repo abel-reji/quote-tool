@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <div class="page">
+            <header class="page-header">
+                <div>
+                    <div class="page-breadcrumbs">
+                        <a href="/">Home</a>
+                        <span>/</span>
+                        <span>Settings</span>
+                    </div>
+                    <h1>Settings</h1>
+                    <p class="page-subtitle">
+                        Update user information, manage branches, and control default quote text used in PDFs.
+                    </p>
+                </div>
+                <div class="logo-container">
+                    <img src="{{ url_for('static', filename='img/dxp_logo.png') }}" alt="DXP Logo">
+                </div>
+            </header>
+
+            <div id="settingsMessage" class="form-message" hidden></div>
+
+            <form id="settingsForm">
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>User</h2>
+                            <p class="section-subtitle">Sales engineer defaults used in the quote PDF.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="salesEngineerName">Sales Engineer Name</label>
+                            <input type="text" id="salesEngineerName" value="{{ settings.user.sales_engineer_name }}">
+                        </div>
+
+                        <div class="field">
+                            <label for="salesEngineerPhone">Phone</label>
+                            <input type="text" id="salesEngineerPhone" value="{{ settings.user.sales_engineer_phone }}">
+                        </div>
+
+                        <div class="field">
+                            <label for="salesEngineerEmail">Email</label>
+                            <input type="email" id="salesEngineerEmail" value="{{ settings.user.sales_engineer_email }}">
+                        </div>
+
+                        <div class="field">
+                            <label for="defaultBranchId">Default Branch</label>
+                            <select id="defaultBranchId">
+                                {% for branch in settings.branches %}
+                                <option value="{{ branch.branch_id }}" {% if settings.user.default_branch_id == branch.branch_id %}selected{% endif %}>
+                                    {{ branch.branch_id }}{% if branch.branch_name %} - {{ branch.branch_name }}{% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="section-header">
+                        <div>
+                            <h2>Branches</h2>
+                            <p class="section-subtitle">Edit existing branches or add new ones.</p>
+                        </div>
+                        <button type="button" id="addBranchBtn" class="secondary-btn">+ Add Branch</button>
+                    </div>
+
+                    <div id="branchCards">
+                        {% for branch in settings.branches %}
+                        <div class="branch-card">
+                            <div class="branch-card-top">
+                                <h3>Branch</h3>
+                                <button type="button" class="remove-line-item-btn remove-branch-btn">Remove</button>
+                            </div>
+
+                            <div class="form-grid">
+                                <div class="field">
+                                    <label>Branch ID</label>
+                                    <input type="text" class="branch-id" value="{{ branch.branch_id }}">
+                                </div>
+
+                                <div class="field">
+                                    <label>Branch Name</label>
+                                    <input type="text" class="branch-name" value="{{ branch.branch_name }}">
+                                </div>
+
+                                <div class="field field-wide">
+                                    <label>Address</label>
+                                    <input type="text" class="branch-address" value="{{ branch.address }}">
+                                </div>
+
+                                <div class="field">
+                                    <label>City</label>
+                                    <input type="text" class="branch-city" value="{{ branch.city }}">
+                                </div>
+
+                                <div class="field">
+                                    <label>State</label>
+                                    <input type="text" class="branch-state" value="{{ branch.state }}">
+                                </div>
+
+                                <div class="field">
+                                    <label>ZIP</label>
+                                    <input type="text" class="branch-zip" value="{{ branch.zip }}">
+                                </div>
+
+                                <div class="field">
+                                    <label>Phone</label>
+                                    <input type="text" class="branch-phone" value="{{ branch.phone }}">
+                                </div>
+
+                                <div class="field">
+                                    <label>Fax</label>
+                                    <input type="text" class="branch-fax" value="{{ branch.fax }}">
+                                </div>
+
+                                <div class="field field-full">
+                                    <label>Tagline</label>
+                                    <input type="text" class="branch-tagline" value="{{ branch.tagline }}">
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Quotes</h2>
+                            <p class="section-subtitle">Default text used in the generated PDF.</p>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="field field-full">
+                            <label for="defaultCoverInfoText">Default Cover Info Text</label>
+                            <textarea id="defaultCoverInfoText" rows="4">{{ settings.quotes.default_cover_info_text }}</textarea>
+                        </div>
+
+                        <div class="field field-full">
+                            <label for="defaultQuoteValidity">Default Quote Validity</label>
+                            <textarea id="defaultQuoteValidity" rows="3">{{ settings.quotes.default_quote_validity }}</textarea>
+                        </div>
+
+                        <div class="field field-full">
+                            <label for="defaultSignatureLines">Default PDF Closing / Signature Block</label>
+                            <textarea id="defaultSignatureLines" rows="7">{% for line in settings.quotes.default_signature_lines %}{{ line }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+                            <div class="field-help">One line per row. Blank lines are preserved as spacing in the PDF.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="form-actions">
+                    <button type="submit" class="primary-btn" id="saveSettingsBtn">Save Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <template id="branchCardTemplate">
+        <div class="branch-card">
+            <div class="branch-card-top">
+                <h3>Branch</h3>
+                <button type="button" class="remove-line-item-btn remove-branch-btn">Remove</button>
+            </div>
+
+            <div class="form-grid">
+                <div class="field">
+                    <label>Branch ID</label>
+                    <input type="text" class="branch-id">
+                </div>
+
+                <div class="field">
+                    <label>Branch Name</label>
+                    <input type="text" class="branch-name">
+                </div>
+
+                <div class="field field-wide">
+                    <label>Address</label>
+                    <input type="text" class="branch-address">
+                </div>
+
+                <div class="field">
+                    <label>City</label>
+                    <input type="text" class="branch-city">
+                </div>
+
+                <div class="field">
+                    <label>State</label>
+                    <input type="text" class="branch-state">
+                </div>
+
+                <div class="field">
+                    <label>ZIP</label>
+                    <input type="text" class="branch-zip">
+                </div>
+
+                <div class="field">
+                    <label>Phone</label>
+                    <input type="text" class="branch-phone">
+                </div>
+
+                <div class="field">
+                    <label>Fax</label>
+                    <input type="text" class="branch-fax">
+                </div>
+
+                <div class="field field-full">
+                    <label>Tagline</label>
+                    <input type="text" class="branch-tagline">
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const form = document.getElementById("settingsForm");
+            const messageEl = document.getElementById("settingsMessage");
+            const branchCards = document.getElementById("branchCards");
+            const addBranchBtn = document.getElementById("addBranchBtn");
+            const branchCardTemplate = document.getElementById("branchCardTemplate");
+            const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+            const defaultBranchIdSelect = document.getElementById("defaultBranchId");
+
+            function showMessage(type, text) {
+                messageEl.className = `form-message ${type}`;
+                messageEl.textContent = text;
+                messageEl.hidden = false;
+                window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+
+            function clearMessage() {
+                messageEl.hidden = true;
+                messageEl.textContent = "";
+                messageEl.className = "form-message";
+            }
+
+            function attachBranchCardListeners(card) {
+                const removeBtn = card.querySelector(".remove-branch-btn");
+                removeBtn.addEventListener("click", () => {
+                    const cards = branchCards.querySelectorAll(".branch-card");
+                    if (cards.length <= 1) {
+                        showMessage("error", "At least one branch is required.");
+                        return;
+                    }
+                    card.remove();
+                    refreshDefaultBranchOptions();
+                });
+
+                const branchIdInput = card.querySelector(".branch-id");
+                const branchNameInput = card.querySelector(".branch-name");
+
+                [branchIdInput, branchNameInput].forEach((input) => {
+                    input.addEventListener("input", refreshDefaultBranchOptions);
+                });
+            }
+
+            function refreshDefaultBranchOptions() {
+                const currentValue = defaultBranchIdSelect.value;
+                const cards = Array.from(branchCards.querySelectorAll(".branch-card"));
+
+                const options = cards
+                    .map((card) => {
+                        const branchId = card.querySelector(".branch-id").value.trim();
+                        const branchName = card.querySelector(".branch-name").value.trim();
+                        if (!branchId) return null;
+                        return {
+                            value: branchId,
+                            label: branchName ? `${branchId} - ${branchName}` : branchId
+                        };
+                    })
+                    .filter(Boolean);
+
+                defaultBranchIdSelect.innerHTML = options.map((option) => {
+                    const selected = option.value === currentValue ? "selected" : "";
+                    return `<option value="${option.value}" ${selected}>${option.label}</option>`;
+                }).join("");
+
+                if (!defaultBranchIdSelect.value && options.length) {
+                    defaultBranchIdSelect.value = options[0].value;
+                }
+            }
+
+            function addBranchCard() {
+                const fragment = branchCardTemplate.content.cloneNode(true);
+                const card = fragment.querySelector(".branch-card");
+                branchCards.appendChild(card);
+                attachBranchCardListeners(card);
+                refreshDefaultBranchOptions();
+            }
+
+            Array.from(branchCards.querySelectorAll(".branch-card")).forEach(attachBranchCardListeners);
+
+            addBranchBtn.addEventListener("click", () => {
+                clearMessage();
+                addBranchCard();
+            });
+
+            form.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                clearMessage();
+
+                try {
+                    const branches = Array.from(branchCards.querySelectorAll(".branch-card")).map((card) => ({
+                        branch_id: card.querySelector(".branch-id").value.trim(),
+                        branch_name: card.querySelector(".branch-name").value.trim(),
+                        address: card.querySelector(".branch-address").value.trim(),
+                        city: card.querySelector(".branch-city").value.trim(),
+                        state: card.querySelector(".branch-state").value.trim(),
+                        zip: card.querySelector(".branch-zip").value.trim(),
+                        phone: card.querySelector(".branch-phone").value.trim(),
+                        fax: card.querySelector(".branch-fax").value.trim(),
+                        tagline: card.querySelector(".branch-tagline").value.trim(),
+                    }));
+
+                    const payload = {
+                        user: {
+                            sales_engineer_name: document.getElementById("salesEngineerName").value.trim(),
+                            sales_engineer_phone: document.getElementById("salesEngineerPhone").value.trim(),
+                            sales_engineer_email: document.getElementById("salesEngineerEmail").value.trim(),
+                            default_branch_id: document.getElementById("defaultBranchId").value.trim(),
+                        },
+                        branches,
+                        quotes: {
+                            default_cover_info_text: document.getElementById("defaultCoverInfoText").value.trim(),
+                            default_quote_validity: document.getElementById("defaultQuoteValidity").value.trim(),
+                            default_signature_lines: document.getElementById("defaultSignatureLines").value.split(/\r?\n/),
+                        }
+                    };
+
+                    saveSettingsBtn.disabled = true;
+                    saveSettingsBtn.textContent = "Saving Settings...";
+
+                    const response = await fetch("/api/settings", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.message || "Unable to save settings.");
+                    }
+
+                    showMessage("success", "Settings saved successfully.");
+                    refreshDefaultBranchOptions();
+                } catch (error) {
+                    showMessage("error", error.message || "Unable to save settings.");
+                } finally {
+                    saveSettingsBtn.disabled = false;
+                    saveSettingsBtn.textContent = "Save Settings";
+                }
+            });
+
+            refreshDefaultBranchOptions();
+        });
+    </script>
+</body>
+</html>

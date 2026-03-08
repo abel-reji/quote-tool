@@ -6,7 +6,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const lineItemTemplate = document.getElementById("lineItemTemplate");
     const formMessage = document.getElementById("formMessage");
     const saveQuoteBtn = document.getElementById("saveQuoteBtn");
-    const deleteQuoteBtn = document.getElementById("deleteQuoteBtn");
     const config = window.quoteEditorConfig || { editMode: false, quote: null };
 
     function toNumber(value) {
@@ -295,44 +294,6 @@ document.addEventListener("DOMContentLoaded", () => {
             saveQuoteBtn.textContent = config.editMode ? "Update Quote & Open PDF" : "Save Quote & Open PDF";
         }
     });
-
-    if (deleteQuoteBtn && config.editMode && config.quote) {
-        deleteQuoteBtn.addEventListener("click", async () => {
-            clearMessage();
-
-            const confirmed = window.confirm(
-                `Delete quote ${config.quote.quote_number}? This cannot be undone.`
-            );
-
-            if (!confirmed) {
-                return;
-            }
-
-            try {
-                deleteQuoteBtn.disabled = true;
-                deleteQuoteBtn.textContent = "Deleting...";
-
-                const response = await fetch(
-                    `/delete-quote/${encodeURIComponent(config.quote.quote_number)}`,
-                    { method: "DELETE" }
-                );
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.message || "Failed to delete quote.");
-                }
-
-                window.location.href = "/";
-            } catch (error) {
-                console.error("Error deleting quote:", error);
-                showMessage("error", error.message);
-            } finally {
-                deleteQuoteBtn.disabled = false;
-                deleteQuoteBtn.textContent = "Delete Quote";
-            }
-        });
-    }
 
     if (config.editMode && config.quote && Array.isArray(config.quote.line_items) && config.quote.line_items.length) {
         config.quote.line_items.forEach((item) => createLineItemRow(item));

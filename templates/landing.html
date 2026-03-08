@@ -9,13 +9,35 @@
 <body>
     <div class="app-shell">
         <div class="page dashboard-page">
-            <header class="page-header dashboard-header">
-                <div>
-                    <h1>Quote Generator</h1>
-                    <p class="page-subtitle">
-                        Start a new quote, review saved quotes, or reopen any quote for editing.
-                    </p>
+            <header class="page-header dashboard-header dashboard-header-with-menu">
+                <div class="header-left-group">
+                    <div class="menu-wrap">
+                        <button
+                            type="button"
+                            id="menuToggle"
+                            class="menu-toggle"
+                            aria-label="Open menu"
+                            aria-expanded="false"
+                            aria-controls="headerMenu"
+                        >
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </button>
+
+                        <div id="headerMenu" class="header-menu" hidden>
+                            <a href="/settings" class="header-menu-item">Settings</a>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h1>Quote Generator</h1>
+                        <p class="page-subtitle">
+                            Start a new quote, review saved quotes, or manage defaults from Settings.
+                        </p>
+                    </div>
                 </div>
+
                 <div class="logo-container">
                     <img src="{{ url_for('static', filename='img/dxp_logo.png') }}" alt="DXP Logo">
                 </div>
@@ -34,9 +56,7 @@
                         <p class="dashboard-copy">
                             Start a fresh quote, add line items, calculate pricing, and save directly to the quote log.
                         </p>
-                        <a href="/quote-tool" class="primary-button">
-    Open Quoting Tool
-</a>
+                        <a href="/quote-tool" class="primary-button">Open Quoting Tool</a>
                     </div>
                 </section>
 
@@ -65,6 +85,9 @@
             const listEl = document.getElementById("quoteList");
             const stateEl = document.getElementById("quoteListState");
             const searchEl = document.getElementById("quoteSearch");
+            const menuToggle = document.getElementById("menuToggle");
+            const headerMenu = document.getElementById("headerMenu");
+
             let quotes = [];
 
             function formatCurrency(value) {
@@ -85,7 +108,10 @@
                 listEl.innerHTML = items.map((quote) => `
                     <a class="quote-list-item" href="${quote.edit_url}">
                         <div class="quote-list-main">
-                            <div class="quote-list-title-row"><span class="quote-disposition-marker disposition-${quote.disposition || "pending"}" title="${(quote.disposition || "pending").charAt(0).toUpperCase() + (quote.disposition || "pending").slice(1)}"></span><strong>${quote.quote_number}</strong></div>
+                            <div class="quote-list-title-row">
+                                <span class="quote-disposition-marker disposition-${quote.disposition || "pending"}" title="${(quote.disposition || "pending").charAt(0).toUpperCase() + (quote.disposition || "pending").slice(1)}"></span>
+                                <strong>${quote.quote_number}</strong>
+                            </div>
                             <span>${quote.customer || "No customer"}</span>
                             <span>${quote.project_description || "No project description"}</span>
                         </div>
@@ -113,6 +139,32 @@
 
                 renderQuotes(filtered);
             }
+
+            function closeMenu() {
+                headerMenu.hidden = true;
+                menuToggle.setAttribute("aria-expanded", "false");
+            }
+
+            function openMenu() {
+                headerMenu.hidden = false;
+                menuToggle.setAttribute("aria-expanded", "true");
+            }
+
+            menuToggle.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const isOpen = menuToggle.getAttribute("aria-expanded") === "true";
+                if (isOpen) {
+                    closeMenu();
+                } else {
+                    openMenu();
+                }
+            });
+
+            document.addEventListener("click", (event) => {
+                if (!headerMenu.contains(event.target) && !menuToggle.contains(event.target)) {
+                    closeMenu();
+                }
+            });
 
             searchEl.addEventListener("input", applySearch);
 

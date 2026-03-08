@@ -4,7 +4,6 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.units import inch
-from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     SimpleDocTemplate,
     Table,
@@ -21,34 +20,41 @@ def currency(value: float) -> str:
     return f"${value:,.2f}"
 
 
-def get_branch_footer(branch_id: str) -> dict:
-    branch_map = {
-        "325": {
+def get_branch_footer(settings: dict, branch_id: str) -> dict:
+    branches = settings.get("branches", [])
+    branch = next((b for b in branches if str(b.get("branch_id")) == str(branch_id)), None)
+
+    if not branch and branches:
+        branch = branches[0]
+
+    if not branch:
+        return {
             "tagline": "INNOVATIVE PUMPING SOLUTIONS • SUPPLY CHAIN SERVICES • SERVICE CENTERS",
-            "address": "4951 S. Frontage Road • Tulsa, OK 74107",
-            "phone_fax": "Phone 918-446-5515 • Fax 918-446-0338",
-        },
-        "190": {
-            "tagline": "INNOVATIVE PUMPING SOLUTIONS • SUPPLY CHAIN SERVICES • SERVICE CENTERS",
-            "address": "1401 SE 29th St • Oklahoma City, OK 73129",
-            "phone_fax": "Phone 405-670-4491 • Fax 405-670-2702",
-        },
+            "address": "",
+            "phone_fax": "",
+        }
+
+    address_parts = [
+        branch.get("address", "").strip(),
+        ", ".join(filter(None, [
+            branch.get("city", "").strip(),
+            branch.get("state", "").strip(),
+            branch.get("zip", "").strip(),
+        ])).strip(", "),
+    ]
+    address_line = " • ".join(part for part in address_parts if part)
+
+    phone_fax_parts = []
+    if branch.get("phone"):
+        phone_fax_parts.append(f"PHONE: {branch['phone']}")
+    if branch.get("fax"):
+        phone_fax_parts.append(f"FAX: {branch['fax']}")
+
+    return {
+        "tagline": branch.get("tagline", "INNOVATIVE PUMPING SOLUTIONS • SUPPLY CHAIN SERVICES • SERVICE CENTERS"),
+        "address": address_line,
+        "phone_fax": " • ".join(phone_fax_parts),
     }
-    return branch_map.get(branch_id, branch_map["325"])
-
-
-def get_logo_dimensions(logo_path: Path, max_width: float, max_height: float):
-    if not logo_path or not Path(logo_path).exists():
-        return None
-
-    reader = ImageReader(str(logo_path))
-    img_width, img_height = reader.getSize()
-
-    width_scale = max_width / img_width
-    height_scale = max_height / img_height
-    scale = min(width_scale, height_scale)
-
-    return img_width * scale, img_height * scale
 
 
 def draw_page_header(canvas, doc, logo_path: Path | None = None):
@@ -56,21 +62,30 @@ def draw_page_header(canvas, doc, logo_path: Path | None = None):
 
     page_width, page_height = LETTER
 
-    if logo_path and Path(logo_path).exists():
-        dims = get_logo_dimensions(logo_path, max_width=2.45 * inch, max_height=0.95 * inch)
-        if dims:
-            draw_width, draw_height = dims
-            x = doc.leftMargin
-            y = page_height - 0.40 * inch - draw_height
+    if logo_path and logo_path.exists():
+        try:
+            desired_width = 1.55 * inch
+            max_height = 0.55 * inch
+            img_width, img_height = 500, 200
+            aspect = img_height / img_width
+            draw_width = desired_width
+            draw_height = desired_width * aspect
+
+            if draw_height > max_height:
+                draw_height = max_height
+                draw_width = draw_height / aspect
+
             canvas.drawImage(
                 str(logo_path),
-                x,
-                y,
+                doc.leftMargin,
+                page_height - 0.93 * inch,
                 width=draw_width,
                 height=draw_height,
                 preserveAspectRatio=True,
                 mask="auto",
             )
+        except Exception:
+            pass
 
     canvas.setFont("Helvetica-Bold", 10)
     canvas.setFillColor(colors.HexColor("#00508f"))
@@ -91,30 +106,22 @@ def draw_quote_metadata(
     sales_engineer_phone: str,
     sales_engineer_email: str,
 ):
-    """
-    Draw the quote metadata block only on page 1.
-    Tune title_y to move the whole block up/down.
-    """
     page_width, page_height = LETTER
     right_x = page_width - doc.rightMargin - 0.40 * inch
 
-    # Smaller number moves the block upward; larger moves it downward.
     title_y = page_height - 1.25 * inch
     line_gap = 0.27 * inch
-    label_offset = 1.05 * inch
 
     canvas.saveState()
     canvas.setFillColor(colors.black)
 
-
     label_x = right_x - 1.05 * inch
-    value_x = right_x - 0.95 * inch   # start of values column
+    value_x = right_x - 0.95 * inch
 
     canvas.setFont("Times-Bold", 18)
     canvas.drawRightString(right_x, title_y, "Quotation")
 
     canvas.setFont("Times-Bold", 11)
-
     canvas.drawRightString(label_x, title_y - line_gap, "Quote #:")
     canvas.drawRightString(label_x, title_y - 2 * line_gap, "Quote Date:")
     canvas.drawRightString(label_x, title_y - 3 * line_gap, "Sales Engineer:")
@@ -122,7 +129,6 @@ def draw_quote_metadata(
     canvas.drawRightString(label_x, title_y - 5 * line_gap, "Direct Email:")
 
     canvas.setFont("Times-Roman", 11)
-
     canvas.drawString(value_x, title_y - line_gap, str(quote["quote_number"]))
     canvas.drawString(value_x, title_y - 2 * line_gap, str(quote["date_created"]))
     canvas.drawString(value_x, title_y - 3 * line_gap, sales_engineer_name)
@@ -145,8 +151,10 @@ def draw_footer(canvas, doc, footer_info: dict):
 
     canvas.setFont("Helvetica", 9)
     canvas.setFillColor(colors.black)
-    canvas.drawCentredString(center_x, footer_y_bottom + 0.14 * inch, footer_info["address"])
-    canvas.drawCentredString(center_x, footer_y_bottom, footer_info["phone_fax"])
+    if footer_info["address"]:
+        canvas.drawCentredString(center_x, footer_y_bottom + 0.14 * inch, footer_info["address"])
+    if footer_info["phone_fax"]:
+        canvas.drawCentredString(center_x, footer_y_bottom, footer_info["phone_fax"])
 
     canvas.restoreState()
 
@@ -202,13 +210,21 @@ def add_terms_and_conditions_page(story, styles_dict):
 def build_quote_pdf(
     quote: dict,
     pdf_path: Path,
+    settings: dict,
     logo_path: Path | None = None,
-    sales_engineer_name: str = "",
-    sales_engineer_phone: str = "",
-    sales_engineer_email: str = "",
 ):
     styles = getSampleStyleSheet()
-    footer_info = get_branch_footer(str(quote.get("branch_id", "325")))
+
+    user_settings = settings.get("user", {})
+    quote_settings = settings.get("quotes", {})
+    sales_engineer_name = user_settings.get("sales_engineer_name", "")
+    sales_engineer_phone = user_settings.get("sales_engineer_phone", "")
+    sales_engineer_email = user_settings.get("sales_engineer_email", "")
+    footer_info = get_branch_footer(settings, str(quote.get("branch_id", "")))
+
+    if logo_path is None:
+        static_logo = Path(__file__).resolve().parent / "static" / "img" / "dxp_logo.png"
+        logo_path = static_logo if static_logo.exists() else None
 
     normal_style = ParagraphStyle(
         "CustomBody",
@@ -346,8 +362,6 @@ def build_quote_pdf(
     )
 
     story = []
-
-    # Reserve vertical space beneath the fixed page header area.
     story.append(Spacer(1, 0.62 * inch))
 
     customer_project_table = Table(
@@ -367,13 +381,10 @@ def build_quote_pdf(
     story.append(customer_project_table)
     story.append(Spacer(1, 0.35 * inch))
 
-    intro_text = (
-        "DXP is pleased to offer you the following quote. "
-        "Should you require additional information or if we can be of further service, "
-        "please contact us at your convenience."
-    )
-    story.append(Paragraph(intro_text, normal_style))
-    story.append(Spacer(1, 0.10 * inch))
+    intro_text = quote_settings.get("default_cover_info_text", "")
+    if intro_text:
+        story.append(Paragraph(intro_text, normal_style))
+        story.append(Spacer(1, 0.10 * inch))
 
     line_items_data = [[
         Paragraph("Item", table_header_style),
@@ -428,12 +439,10 @@ def build_quote_pdf(
     story.append(line_table)
     story.append(Spacer(1, 0.08 * inch))
 
-    story.append(Paragraph(
-        "Customer to approve rated design point, materials of construction, and NPSH requirements. "
-        "Quote is valid for 30 days.",
-        normal_style
-    ))
-    story.append(Spacer(1, 0.06 * inch))
+    validity_text = quote_settings.get("default_quote_validity", "")
+    if validity_text:
+        story.append(Paragraph(validity_text, normal_style))
+        story.append(Spacer(1, 0.06 * inch))
 
     total_table = Table(
         [[
@@ -457,7 +466,6 @@ def build_quote_pdf(
     story.append(Spacer(1, 0.08 * inch))
 
     notes_block = []
-
     notes_block.append(Paragraph("Notes", section_heading_style))
     notes_block.append(Spacer(1, 0.01 * inch))
 
@@ -488,19 +496,19 @@ def build_quote_pdf(
     add_bullet("This proposal, including attachments, is confidential and intended solely for use by the recipient to whom it is addressed and the end user noted herein. Do not copy, forward or disclose this proposal in whole or in part without permission from DXP Enterprises, Inc.")
     notes_block.append(Spacer(1, 0.04 * inch))
 
-    closing_block = [
-        Paragraph("Thank you for the opportunity,", notes_closing_style),
-        Spacer(1, 0.04 * inch),
-        Paragraph("Abel Reji", notes_closing_style),
-        Paragraph("Sales Engineer", notes_closing_style),
-        Paragraph("918-703-7381", notes_closing_style),
-        Paragraph("Abel.Reji@dxpe.com", notes_closing_style),
-    ]
-
     for item in notes_block:
         story.append(item)
 
-    story.append(KeepTogether(closing_block))
+    signature_lines = quote_settings.get("default_signature_lines", [])
+    closing_block = []
+    for line in signature_lines:
+        if line.strip():
+            closing_block.append(Paragraph(line, notes_closing_style))
+        else:
+            closing_block.append(Spacer(1, 0.04 * inch))
+
+    if closing_block:
+        story.append(KeepTogether(closing_block))
 
     add_terms_and_conditions_page(
         story,
