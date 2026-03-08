@@ -1,7 +1,7 @@
 # Quote Generator Tool
 
 A lightweight internal quoting application built with **Python (Flask)**
-that allows sales engineers to quickly generate professional PDF quotes,
+that allows users to quickly generate professional PDF quotes,
 track quote history, and manage quote defaults.
 
 The tool provides a simple browser interface for creating quotes,
