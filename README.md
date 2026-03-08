@@ -178,5 +178,3 @@ Planned enhancements include:
 ## Author
 
 **Abel Reji**\
-Mechanical Engineer\
-DXP Enterprises
