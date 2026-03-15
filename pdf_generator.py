@@ -3,6 +3,7 @@ from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 from pypdf import PdfWriter
 import io
+import os
 import sys
 
 def get_branch_footer(settings: dict, branch_id: str) -> dict:
@@ -54,8 +55,8 @@ def convert_html_to_pdf(html_string: str) -> io.BytesIO:
 
 def build_quote_pdf(
     quote: dict,
-    pdf_path: Path,
     settings: dict,
+    pdf_path: Path | None = None,
     logo_path: Path | None = None,
 ):
     if getattr(sys, 'frozen', False):
@@ -67,7 +68,8 @@ def build_quote_pdf(
         template_dir = str(external_templates) if external_templates.exists() else str(BUNDLE_DIR / "templates")
     else:
         BUNDLE_DIR = Path(__file__).resolve().parent
-        DATA_DIR = BUNDLE_DIR / "data"
+        runtime_root = Path(os.environ.get("QUOTE_TOOL_RUNTIME_DIR", "/tmp/quote-tool")) if os.environ.get("VERCEL") else BUNDLE_DIR
+        DATA_DIR = runtime_root / "data"
         template_dir = str(BUNDLE_DIR / "templates")
 
     env = FileSystemLoader(template_dir)
@@ -79,8 +81,11 @@ def build_quote_pdf(
     footer_info = get_branch_footer(settings, str(quote.get("branch_id", "")))
 
     if logo_path is None:
-        static_logo = BUNDLE_DIR / "static" / "img" / "dxp_logo.png"
-        logo_path = static_logo if static_logo.exists() else None
+        logo_candidates = [
+            BUNDLE_DIR / "static" / "img" / "dxp_logo.png",
+            BUNDLE_DIR / "public" / "static" / "img" / "dxp_logo.png",
+        ]
+        logo_path = next((path for path in logo_candidates if path.exists()), None)
 
     # Load and render quote HTML
     quote_template = jinja_env.get_template("quote_pdf.html")
@@ -122,5 +127,13 @@ def build_quote_pdf(
     # T&Cs
     merger.append(tc_pdf_io)
 
-    merger.write(str(pdf_path))
+    result = io.BytesIO()
+    merger.write(result)
     merger.close()
+    result.seek(0)
+
+    if pdf_path is not None:
+        pdf_path.write_bytes(result.getvalue())
+        result.seek(0)
+
+    return result
