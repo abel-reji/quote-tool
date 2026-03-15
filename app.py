@@ -5,7 +5,6 @@ from pathlib import Path
 from datetime import datetime
 import json
 import csv
-import io
 import re
 import sys
 import os
@@ -15,10 +14,6 @@ from pdf_generator import build_quote_pdf
 
 
 APP_FOLDER_NAME = "Quote Tool"
-PROJECT_ROOT = Path(__file__).resolve().parent
-IS_FROZEN = getattr(sys, "frozen", False)
-IS_VERCEL = bool(os.environ.get("VERCEL"))
-_runtime_initialized = False
 
 
 def get_local_appdata_root() -> Path:
@@ -48,10 +43,9 @@ if getattr(sys, "frozen", False):
     EXTERNAL_STATIC = EXE_DIR / "static"
     STATIC_PATH = str(EXTERNAL_STATIC) if EXTERNAL_STATIC.exists() else str(BUNDLE_DIR / "static")
 else:
-    BUNDLE_DIR = PROJECT_ROOT
-    runtime_root = Path(os.environ.get("QUOTE_TOOL_RUNTIME_DIR", "/tmp/quote-tool")) if IS_VERCEL else BUNDLE_DIR
-    DATA_DIR = runtime_root / "data"
-    OUTPUT_DIR = runtime_root / "output"
+    BUNDLE_DIR = Path(__file__).resolve().parent
+    DATA_DIR = BUNDLE_DIR / "data"
+    OUTPUT_DIR = BUNDLE_DIR / "output"
     LEGACY_DATA_DIR = DATA_DIR
     LEGACY_OUTPUT_DIR = OUTPUT_DIR
     TEMPLATE_PATH = str(BUNDLE_DIR / "templates")
@@ -64,8 +58,6 @@ CUSTOMERS_FILE = DATA_DIR / "customers.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 UPLOAD_DIR = DATA_DIR / "uploads"
 DB_FILE = DATA_DIR / "quotes.db"
-SEED_SETTINGS_FILE = BUNDLE_DIR / "data" / "settings.json"
-SEED_CUSTOMERS_FILE = BUNDLE_DIR / "data" / "customers.json"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 QUOTES_DIR.mkdir(parents=True, exist_ok=True)
@@ -261,10 +253,6 @@ def deep_merge(defaults, incoming):
 
 def ensure_settings_file():
     if not SETTINGS_FILE.exists():
-        if SETTINGS_FILE != SEED_SETTINGS_FILE and SEED_SETTINGS_FILE.exists():
-            SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(SEED_SETTINGS_FILE, SETTINGS_FILE)
-            return
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_SETTINGS, f, indent=2)
 
@@ -412,16 +400,6 @@ def calculate_line_item(item: dict) -> dict:
 
 
 def load_customers() -> list:
-    if not CUSTOMERS_FILE.exists():
-        if CUSTOMERS_FILE != SEED_CUSTOMERS_FILE and SEED_CUSTOMERS_FILE.exists():
-            try:
-                CUSTOMERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(SEED_CUSTOMERS_FILE, CUSTOMERS_FILE)
-            except OSError:
-                return []
-        else:
-            return []
-
     if not CUSTOMERS_FILE.exists():
         return []
 
@@ -669,17 +647,15 @@ def export_quote_log():
         "Date Created",
     ]
 
-    csv_buffer = io.StringIO()
-    writer = csv.DictWriter(csv_buffer, fieldnames=export_fieldnames)
-    writer.writeheader()
-    for row in export_rows:
-        writer.writerow({key: row.get(key, "") for key in export_fieldnames})
-
-    file_buffer = io.BytesIO(csv_buffer.getvalue().encode("utf-8"))
-    file_buffer.seek(0)
+    export_path = OUTPUT_DIR / "quote_log_export.csv"
+    with open(export_path, "w", newline="", encoding="utf-8") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=export_fieldnames)
+        writer.writeheader()
+        for row in export_rows:
+            writer.writerow({key: row.get(key, "") for key in export_fieldnames})
 
     return send_file(
-        file_buffer,
+        export_path,
         as_attachment=True,
         download_name="quote_log_export.csv",
         mimetype="text/csv",
@@ -733,19 +709,16 @@ def preview_pdf():
         "attachments": [],
     }
 
+    output_path = OUTPUT_DIR / "preview_test.pdf"
     settings = load_settings()
 
     try:
-        pdf_buffer = build_quote_pdf(
+        build_quote_pdf(
             quote=sample_quote,
+            pdf_path=output_path,
             settings=settings,
         )
-        response = send_file(
-            pdf_buffer,
-            mimetype="application/pdf",
-            download_name="preview_test.pdf",
-            as_attachment=False,
-        )
+        response = send_file(str(output_path), mimetype="application/pdf")
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -935,17 +908,15 @@ def generate_pdf(quote_number):
             return f"Quote file not found: {quote_number}", 404
 
         settings = load_settings()
-        pdf_buffer = build_quote_pdf(
+        pdf_path = OUTPUT_DIR / f"{quote_number}.pdf"
+
+        build_quote_pdf(
             quote=quote,
+            pdf_path=pdf_path,
             settings=settings,
         )
 
-        return send_file(
-            pdf_buffer,
-            as_attachment=False,
-            download_name=f"{quote_number}.pdf",
-            mimetype="application/pdf",
-        )
+        return send_file(pdf_path, as_attachment=False)
 
     except Exception as e:
         import traceback
@@ -977,10 +948,6 @@ def auto_launch_browser():
 
 
 def init_db():
-    global _runtime_initialized
-    if _runtime_initialized:
-        return
-
     with app.app_context():
         db.create_all()
 
@@ -1037,15 +1004,9 @@ def init_db():
             db.session.commit()
             print("Migration complete!")
 
-    _runtime_initialized = True
-
-
-@app.before_request
-def ensure_runtime_ready():
-    init_db()
-
 
 if __name__ == "__main__":
+    ensure_settings_file()
     init_db()
 
     import threading

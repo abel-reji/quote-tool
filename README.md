@@ -134,23 +134,6 @@ Then open your browser:
 
 ------------------------------------------------------------------------
 
-## Running on Vercel
-
-This repo now includes a Vercel-compatible Flask entrypoint:
-
-- `api/index.py` exposes the Flask app for Vercel's Python runtime
-- `vercel.json` rewrites all routes to that entrypoint
-- PDF and CSV downloads are generated in memory so they do not depend on a persistent local `output/` directory
-
-Deploy with Vercel by importing the GitHub repository or using the Vercel CLI.
-
-Important limitation:
-
-- Vercel file storage is ephemeral. The current app still stores SQLite data, settings JSON, and uploaded attachments on the local filesystem, so quote data will not persist reliably across deployments or cold starts.
-- For production use on Vercel, the next step is to move persistence to managed services such as Postgres for quote/settings data and blob/object storage for attachments.
-
-------------------------------------------------------------------------
-
 ## How Quote Numbers Work
 
 Quote numbers follow the format:
@@ -172,15 +155,17 @@ Where:
 
 ## Data Storage
 
-For local desktop usage, the application stores all quote data locally:
+The application stores all quote data locally:
 
-    data/quotes.db
-    data/settings.json
-    data/uploads/
+    data/quotes/
 
-Uploads are stored per quote, and quote exports are generated on demand.
+Each quote is saved as a JSON file.
 
-When running on Vercel, these local files are created in temporary runtime storage only.
+A summary log is maintained in:
+
+    data/quote_log.csv
+
+This allows easy export or integration with spreadsheets.
 
 ------------------------------------------------------------------------
 
