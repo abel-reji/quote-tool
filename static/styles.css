@@ -200,6 +200,12 @@ form > .quote-summary + .form-actions {
     gap: 16px;
 }
 
+.line-item-add-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
 .line-item-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -408,7 +414,18 @@ form > .quote-summary + .form-actions {
 .form-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 12px;
     margin-top: 4px;
+}
+
+.delete-btn {
+    background: #fff4f4;
+    color: #8a2f2f;
+    border-color: #efc7c7;
+}
+
+.delete-btn:hover {
+    background: #ffeaea;
 }
 
 input[type="number"] {

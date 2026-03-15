@@ -32,7 +32,10 @@
 
             <div id="formMessage" class="form-message" hidden></div>
 
-            <form id="quoteForm">
+            <form id="quoteForm" enctype="multipart/form-data">
+		{% if edit_mode and quote %}
+		<input type="hidden" id="existingQuoteNumber" value="{{ quote.quote_number }}">
+		{% endif %}
                 <section class="panel quote-header">
                     <div class="panel-heading">
                         <div>
@@ -133,10 +136,27 @@
                             <h2>Line Items</h2>
                             <p class="section-subtitle">Add products, pricing, margins, and lead times.</p>
                         </div>
-                        <button type="button" id="addLineItemBtn" class="secondary-btn">+ Add Line Item</button>
                     </div>
 
                     <div id="lineItemsContainer"></div>
+		    <div class="line-item-add-footer">
+    		        <button type="button" id="addLineItemBtn" class="secondary-btn">
+     			   + Add Line Item
+  			</button>
+		    </div>
+                </section>
+
+                <section class="panel attachments-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>Attachments</h2>
+                            <p class="section-subtitle">Upload PDF datasheets to append to the quote.</p>
+                        </div>
+                    </div>
+                    <div class="field field-full" style="margin-top: 1rem;">
+                        <input type="file" id="quoteAttachments" name="attachments" accept=".pdf" multiple>
+                        <p class="summary-note" style="margin-top: 0.5rem;">Only PDF files are supported. These will be merged behind the main quote page.</p>
+                    </div>
                 </section>
 
                 <section class="quote-summary sticky-summary">
@@ -150,6 +170,10 @@
                 </section>
 
                 <div class="form-actions">
+		    {% if edit_mode and quote %}
+		    <button type="button" class="secondary-btn delete-btn" id="deleteQuoteBtn">Delete Quote</button>
+		    {% endif %}
+
                     <button type="submit" class="primary-btn" id="saveQuoteBtn">
                         {% if edit_mode %}Update Quote & Open PDF{% else %}Save Quote & Open PDF{% endif %}
                     </button>
@@ -191,12 +215,12 @@
 
                 <div class="field">
                     <label>Net Cost Each</label>
-                    <input type="number" class="net-cost" min="0" step="0.01" placeholder="0.00" required>
+                    <input type="text" class="net-cost" inputmode="decimal" placeholder="0.00" required>
                 </div>
 
                 <div class="field">
                     <label>Sell Price Each</label>
-                    <input type="number" class="sell-price" min="0" step="0.01" placeholder="0.00">
+                    <input type="text" class="sell-price" inputmode="decimal" placeholder="0.00">
                 </div>
 
                 <div class="field">

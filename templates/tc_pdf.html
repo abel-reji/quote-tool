@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    @page {
+        size: letter;
+        margin: 1.35in 0.5in 1.0in 0.5in;
+        @frame header_frame {
+            -pdf-frame-content: header_content;
+            left: 0.5in; width: 7.5in; top: 0.4in; height: 0.85in;
+        }
+        @frame footer_frame {
+            -pdf-frame-content: footer_content;
+            left: 0.5in; width: 7.5in; top: 10.25in; height: 1in;
+        }
+    }
+    body {
+        font-family: Times-Roman, serif;
+        font-size: 9pt;
+        color: #000;
+        line-height: 1.2;
+    }
+    .tc-title {
+        font-family: Times-Bold, serif;
+        font-size: 16pt;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 13px;
+    }
+    .tc-section {
+        font-family: Times-Bold, serif;
+        font-size: 10pt;
+        font-weight: bold;
+        margin-top: 10px;
+        margin-bottom: 5px;
+    }
+    .tc-body {
+        margin-left: 0.36in;
+        margin-bottom: 5px;
+    }
+    .tc-sub {
+        margin-left: 0.36in;
+        margin-bottom: 2px;
+    }
+    .tc-italic {
+	font-style: italic;
+	font-size: 9pt;
+	text-align: center;
+	margin-top: 10px;
+        margin-bottom: 5px;
+    }
+
+       /* Header */
+    .header-table {
+        width: 100%;
+        border: none;
+    }
+
+    .logo-img {
+        height: 0.75in;
+        width: auto;
+    }
+
+    /* Footer */
+    .footer-container {
+        text-align: center;
+        font-family: Helvetica, sans-serif;
+	line-height: 1.05;
+    }
+
+    .footer-tagline {
+        color: #00508f;
+        font-weight: bold;
+        font-size: 9pt;
+	margin-bottom: 2px;
+    }
+
+    .footer-line {
+        font-size: 9pt;
+        color: #000;
+        margin: 0;
+    }
+
+</style>
+</head>
+<body>
+
+<div id="header_content">
+    <table class="header-table">
+        <tr>
+            <td style="width: 50%;">
+                {% if logo_path %}
+                <img src="{{ logo_path }}" class="logo-img" />
+                {% endif %}
+            </td>
+            <td style="width: 50%; vertical-align: center; text-align: right; color: #00508f; font-weight: bold; font-family: Helvetica, sans-serif; font-size: 10pt;">
+                THE INDUSTRIAL DISTRIBUTION EXPERTS
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div id="footer_content">
+    <div class="footer-container">
+        <div class="footer-tagline">{{ footer_info.tagline }}</div>
+        {% if footer_info.address %}
+        <div class="footer-line">{{ footer_info.address }}</div>
+        {% endif %}
+        {% if footer_info.phone_fax %}
+        <div class="footer-line">{{ footer_info.phone_fax }}</div>
+        {% endif %}
+    </div>
+</div>
+
+
+<div class="tc-title">Terms &amp; Conditions</div>
+
+<div class="tc-section">I.&nbsp;&nbsp;&nbsp;&nbsp;CONDITIONS</div>
+<div class="tc-sub">(a)&nbsp;&nbsp;&nbsp;&nbsp;No terms and conditions contained in any order placed with DXP ENTERPRISES, INC., herein referred to as “Company”, other than those stated herein shall be binding on Company.</div>
+<div class="tc-sub">(b)&nbsp;&nbsp;&nbsp;&nbsp;All orders are subject to acceptance by an officer of Company.</div>
+
+<div class="tc-section">II.&nbsp;&nbsp;&nbsp;&nbsp;PRICES</div>
+<div class="tc-body">All prices quoted herein will be subject to the prices in effect at time of shipment.</div>
+
+<div class="tc-section">III.&nbsp;&nbsp;&nbsp;&nbsp;TERMS OF PAYMENT</div>
+<div class="tc-sub">(a)&nbsp;&nbsp;&nbsp;&nbsp;Payment Terms are NET cash thirty (30) days after shipment or notification that shipment is ready to be made. These terms apply to partial as well as complete shipments.</div>
+<div class="tc-sub">(b)&nbsp;&nbsp;&nbsp;&nbsp;All orders subject to approval of credit.</div>
+
+<div class="tc-section">IV.&nbsp;&nbsp;&nbsp;&nbsp;STANDARD WARRANTY</div>
+<div class="tc-sub">(a)&nbsp;&nbsp;&nbsp;&nbsp;The Company warrants its machinery, so far as the same is of its own manufacture, against defects in material and workmanship under normal use and service for which the equipment was designed for a period of one year after date of acceptance but not later than eighteen (18) months from date of shipment. The Company will warrant components or parts not manufactured by it to the same extent that the respective manufacture warrants such equipment and material.</div>
+<div class="tc-sub">(b)&nbsp;&nbsp;&nbsp;&nbsp;This warranty does not obligate the Company to bear the cost of labor or transportation charges in connection with the replacement or repair of defective parts without approval by an officer of the Company prior to the time repairs are made. The obligation under this warranty may be limited to the repair or replacement of parts f.o.b. its factory provided that upon inspection at such point they shall be determined by the Company to have been defective in material or workmanship.</div>
+<div class="tc-sub">(c)&nbsp;&nbsp;&nbsp;&nbsp;If the Company can agree that circumstances require the replacement or repair of defective parts on the jobsite, after a Company representative has determined that a warranty situation does exist, and that no revisions or alterations have been made to the equipment by others, the Company representative will implement the required repairs on an eight-hour straight time basis only.</div>
+<div class="tc-sub">(d)&nbsp;&nbsp;&nbsp;&nbsp;Acceptance of the material from a common carrier constitutes a waiver of any claim against the Company for delay or damages in transit.</div>
+
+<div class="tc-section">V.&nbsp;&nbsp;&nbsp;&nbsp;SHIPMENT</div>
+<div class="tc-sub">(a)&nbsp;&nbsp;&nbsp;&nbsp;Shipment quoted is effective as of proposal date and will be confirmed upon receipt of order, subject to availability of materials and production space. The Company shall not be held responsible for delays due to causes beyond the Company’s control such as strikes, riots, carrier delays, etc.</div>
+<div class="tc-sub">(b)&nbsp;&nbsp;&nbsp;&nbsp;Should significant manufacturing changes or additions be made by the Purchaser after production has begun, shipping commitments may be extended at the Company’s discretion.</div>
+
+<div class="tc-section">VI.&nbsp;&nbsp;&nbsp;&nbsp;TAXES</div>
+<div class="tc-body">The Purchaser shall pay to the Company, in addition to the purchase price, the amount of all Sales, Use, Privilege, Occupation, Excise, or other taxes, Federal, State, local or foreign which the Company is required to pay in connection with furnishing goods or services to the Purchaser.</div>
+
+<div class="tc-section">VII.&nbsp;&nbsp;&nbsp;&nbsp;INSTALLATION</div>
+<div class="tc-body">Equipment shall be transported, installed and connected at Purchaser’s risk and expense. The Company may offer to furnish a service representative to assist in initial installation and start-up, which will be invoiced separately at our current published rates plus living and traveling expenses.</div>
+
+<div class="tc-italic">Full terms and conditions at www.dxpe.com/terms.html</div>
+
+</body>
+</html>

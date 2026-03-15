@@ -6,10 +6,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const lineItemTemplate = document.getElementById("lineItemTemplate");
     const formMessage = document.getElementById("formMessage");
     const saveQuoteBtn = document.getElementById("saveQuoteBtn");
+    const deleteQuoteBtn = document.getElementById("deleteQuoteBtn");
+    const existingQuoteNumber = document.getElementById("existingQuoteNumber")?.value?.trim() || "";
+    const isEditMode = Boolean(existingQuoteNumber);
     const config = window.quoteEditorConfig || { editMode: false, quote: null };
+    const DRAFT_KEY = "quoteToolDraftData";
 
-    function toNumber(value) {
-        const num = parseFloat(value);
+    function parseNumericValue(value) {
+        if (value === null || value === undefined) return 0;
+        const cleaned = String(value).replace(/[^0-9.-]/g, "");
+        if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") return 0;
+        const num = parseFloat(cleaned);
         return Number.isFinite(num) ? num : 0;
     }
 
@@ -18,7 +25,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function formatCurrency(value) {
-        return `$${roundToTwo(value).toFixed(2)}`;
+        const number = parseNumericValue(value);
+        return "$" + roundToTwo(number).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function formatPercent(value) {
+        const number = parseNumericValue(value);
+        if (!Number.isFinite(number) || number === 0) return "";
+        return roundToTwo(number).toFixed(2);
     }
 
     function showMessage(type, text) {
@@ -42,9 +59,22 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function formatCurrencyInputsInRow(row) {
+        const netCostInput = row.querySelector(".net-cost");
+        const sellPriceInput = row.querySelector(".sell-price");
+
+        if (netCostInput && netCostInput.value.trim() !== "") {
+            netCostInput.value = formatCurrency(netCostInput.value);
+        }
+
+        if (sellPriceInput && sellPriceInput.value.trim() !== "") {
+            sellPriceInput.value = formatCurrency(sellPriceInput.value);
+        }
+    }
+
     function updateLineTotal(row) {
-        const quantity = toNumber(row.querySelector(".quantity").value);
-        const sellPrice = toNumber(row.querySelector(".sell-price").value);
+        const quantity = parseNumericValue(row.querySelector(".quantity").value);
+        const sellPrice = parseNumericValue(row.querySelector(".sell-price").value);
         const lineTotal = quantity * sellPrice;
         row.querySelector(".line-total-display").value = formatCurrency(lineTotal);
         return roundToTwo(lineTotal);
@@ -62,10 +92,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateSellPriceFromMargin(row) {
-        const netCost = toNumber(row.querySelector(".net-cost").value);
+        const netCost = parseNumericValue(row.querySelector(".net-cost").value);
         const grossMarginInput = row.querySelector(".gross-margin");
         const sellPriceInput = row.querySelector(".sell-price");
-        const grossMarginPercent = toNumber(grossMarginInput.value);
+        const grossMarginPercent = parseNumericValue(grossMarginInput.value);
 
         if (netCost <= 0 || grossMarginPercent <= 0) {
             sellPriceInput.value = "";
@@ -84,15 +114,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const sellPrice = netCost / (1 - marginDecimal);
-        sellPriceInput.value = roundToTwo(sellPrice).toFixed(2);
+        sellPriceInput.value = formatCurrency(sellPrice);
 
         updateLineTotal(row);
         updateQuoteTotal();
     }
 
     function updateMarginFromSellPrice(row) {
-        const netCost = toNumber(row.querySelector(".net-cost").value);
-        const sellPrice = toNumber(row.querySelector(".sell-price").value);
+        const netCost = parseNumericValue(row.querySelector(".net-cost").value);
+        const sellPrice = parseNumericValue(row.querySelector(".sell-price").value);
         const grossMarginInput = row.querySelector(".gross-margin");
 
         if (netCost <= 0 || sellPrice <= 0) {
@@ -103,7 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const grossMarginPercent = ((sellPrice - netCost) / sellPrice) * 100;
-        grossMarginInput.value = roundToTwo(grossMarginPercent).toFixed(2);
+        grossMarginInput.value = formatPercent(grossMarginPercent);
 
         updateLineTotal(row);
         updateQuoteTotal();
@@ -122,6 +152,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function attachCurrencyFieldBehavior(input, onInputCallback) {
+        input.addEventListener("focus", () => {
+            input.value = input.value.replace(/[^0-9.-]/g, "");
+        });
+
+        input.addEventListener("input", () => {
+            if (typeof onInputCallback === "function") {
+                onInputCallback();
+            }
+        });
+
+        input.addEventListener("blur", () => {
+            const numericValue = parseNumericValue(input.value);
+            if (input.value.trim() === "" || numericValue === 0) {
+                input.value = "";
+            } else {
+                input.value = formatCurrency(numericValue);
+            }
+        });
+    }
+
     function attachRowListeners(row) {
         const quantityInput = row.querySelector(".quantity");
         const netCostInput = row.querySelector(".net-cost");
@@ -134,12 +185,12 @@ document.addEventListener("DOMContentLoaded", () => {
             updateSellPriceFromMargin(row);
         });
 
-        sellPriceInput.addEventListener("input", () => {
+        attachCurrencyFieldBehavior(sellPriceInput, () => {
             row.dataset.lastEditedPricingField = "sell_price";
             updateMarginFromSellPrice(row);
         });
 
-        netCostInput.addEventListener("input", () => {
+        attachCurrencyFieldBehavior(netCostInput, () => {
             handleNetCostChange(row);
         });
 
@@ -152,6 +203,7 @@ document.addEventListener("DOMContentLoaded", () => {
             row.remove();
             renumberLineItems();
             updateQuoteTotal();
+            saveDraft();
         });
     }
 
@@ -164,6 +216,8 @@ document.addEventListener("DOMContentLoaded", () => {
         row.querySelector(".sell-price").value = item.sell_price_each ?? "";
         row.querySelector(".gross-margin").value = item.gross_margin_percent ?? "";
         row.querySelector(".lead-time").value = item.lead_time || "";
+
+        formatCurrencyInputsInRow(row);
         updateLineTotal(row);
     }
 
@@ -173,11 +227,16 @@ document.addEventListener("DOMContentLoaded", () => {
         row.dataset.lastEditedPricingField = "";
         attachRowListeners(row);
         lineItemsContainer.appendChild(row);
+
         if (item) {
             populateRow(row, item);
+        } else {
+            updateLineTotal(row);
         }
+
         renumberLineItems();
         updateQuoteTotal();
+        return row;
     }
 
     function collectLineItems() {
@@ -188,9 +247,9 @@ document.addEventListener("DOMContentLoaded", () => {
             item_description: row.querySelector(".item-description").value.trim(),
             item_long_description: row.querySelector(".item-long-description").value.trim(),
             quantity: Number(row.querySelector(".quantity").value || 0),
-            net_cost_each: Number(row.querySelector(".net-cost").value || 0),
-            sell_price_each: Number(row.querySelector(".sell-price").value || 0),
-            gross_margin_percent: Number(row.querySelector(".gross-margin").value || 0),
+            net_cost_each: parseNumericValue(row.querySelector(".net-cost").value),
+            sell_price_each: parseNumericValue(row.querySelector(".sell-price").value),
+            gross_margin_percent: parseNumericValue(row.querySelector(".gross-margin").value),
             lead_time: row.querySelector(".lead-time").value.trim()
         }));
     }
@@ -222,9 +281,71 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function saveDraft() {
+        if (isEditMode) return;
+
+        const lineItems = collectLineItems();
+        const selectedDisposition = document.querySelector('input[name="disposition"]:checked');
+
+        const draftData = {
+            branch_id: document.getElementById("branchId").value,
+            customer: document.getElementById("customer").value,
+            customer_contact: document.getElementById("customerContact").value,
+            customer_email: document.getElementById("customerEmail").value,
+            project_description: document.getElementById("projectDescription").value,
+            disposition: selectedDisposition ? selectedDisposition.value : "pending",
+            line_items: lineItems
+        };
+
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+    }
+
+    function clearDraft() {
+        localStorage.removeItem(DRAFT_KEY);
+    }
+
+    function loadDraft() {
+        if (isEditMode) return false;
+
+        const draftJson = localStorage.getItem(DRAFT_KEY);
+        if (!draftJson) return false;
+
+        try {
+            const draftData = JSON.parse(draftJson);
+
+            if (draftData.branch_id) document.getElementById("branchId").value = draftData.branch_id;
+            if (draftData.customer) document.getElementById("customer").value = draftData.customer;
+            if (draftData.customer_contact) document.getElementById("customerContact").value = draftData.customer_contact;
+            if (draftData.customer_email) document.getElementById("customerEmail").value = draftData.customer_email;
+            if (draftData.project_description) document.getElementById("projectDescription").value = draftData.project_description;
+
+            if (draftData.disposition) {
+                const radio = document.querySelector(`input[name="disposition"][value="${draftData.disposition}"]`);
+                if (radio) radio.checked = true;
+            }
+
+            if (draftData.line_items && Array.isArray(draftData.line_items) && draftData.line_items.length > 0) {
+                lineItemsContainer.innerHTML = "";
+                draftData.line_items.forEach((item) => createLineItemRow(item));
+            }
+
+            return true;
+        } catch (e) {
+            console.error("Failed to parse draft data", e);
+            clearDraft();
+            return false;
+        }
+    }
+
+    form.addEventListener("input", () => {
+        saveDraft();
+    });
+
     addLineItemBtn.addEventListener("click", () => {
         clearMessage();
-        createLineItemRow();
+        const newRow = createLineItemRow();
+        saveDraft();
+        newRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
 
     form.addEventListener("submit", async (event) => {
@@ -247,20 +368,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 line_items: lineItems
             };
 
-            const endpoint = config.editMode && config.quote
-                ? `/update-quote/${encodeURIComponent(config.quote.quote_number)}`
+            const formData = new FormData();
+            formData.append("data", JSON.stringify(payload));
+
+            const fileInput = document.getElementById("quoteAttachments");
+            if (fileInput && fileInput.files.length > 0) {
+                Array.from(fileInput.files).forEach((file) => {
+                    formData.append("attachments", file);
+                });
+            }
+
+            const endpoint = isEditMode
+                ? `/update-quote/${encodeURIComponent(existingQuoteNumber)}`
                 : "/save-quote";
-            const method = config.editMode ? "PUT" : "POST";
+            const method = isEditMode ? "PUT" : "POST";
 
             saveQuoteBtn.disabled = true;
-            saveQuoteBtn.textContent = config.editMode ? "Updating Quote..." : "Saving Quote...";
+            saveQuoteBtn.textContent = isEditMode ? "Updating Quote..." : "Saving Quote...";
 
             const response = await fetch(endpoint, {
                 method,
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
+                body: formData
             });
 
             const rawText = await response.text();
@@ -280,10 +408,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
             showMessage(
                 "success",
-                `${config.editMode ? "Quote updated" : "Quote saved"}: ${result.quote_number}. Total: ${formatCurrency(Number(result.quote_total))}`
+                `${isEditMode ? "Quote updated" : "Quote saved"}: ${result.quote_number}. Total: ${formatCurrency(result.quote_total)}`
             );
 
-            if (!config.editMode && result.edit_url) {
+            if (!isEditMode && result.edit_url) {
+                clearDraft();
                 window.history.replaceState({}, "", result.edit_url);
             }
 
@@ -293,13 +422,52 @@ document.addEventListener("DOMContentLoaded", () => {
             showMessage("error", error.message);
         } finally {
             saveQuoteBtn.disabled = false;
-            saveQuoteBtn.textContent = config.editMode ? "Update Quote & Open PDF" : "Save Quote & Open PDF";
+            saveQuoteBtn.textContent = isEditMode ? "Update Quote & Open PDF" : "Save Quote & Open PDF";
         }
     });
 
-    if (config.editMode && config.quote && Array.isArray(config.quote.line_items) && config.quote.line_items.length) {
+    if (deleteQuoteBtn && existingQuoteNumber) {
+        deleteQuoteBtn.addEventListener("click", async () => {
+            const confirmed = window.confirm(
+                `Delete quote ${existingQuoteNumber}? This cannot be undone.`
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                deleteQuoteBtn.disabled = true;
+                deleteQuoteBtn.textContent = "Deleting...";
+
+                const response = await fetch(
+                    `/delete-quote/${encodeURIComponent(existingQuoteNumber)}`,
+                    { method: "DELETE" }
+                );
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || "Failed to delete quote.");
+                }
+
+                clearDraft();
+                window.location.href = result.redirect_url || "/";
+            } catch (error) {
+                console.error("Error deleting quote:", error);
+                showMessage("error", error.message);
+                deleteQuoteBtn.disabled = false;
+                deleteQuoteBtn.textContent = "Delete Quote";
+            }
+        });
+    }
+
+    if (isEditMode && config.quote && Array.isArray(config.quote.line_items) && config.quote.line_items.length) {
         config.quote.line_items.forEach((item) => createLineItemRow(item));
     } else {
-        createLineItemRow();
+        const hasDraft = loadDraft();
+        if (!hasDraft) {
+            createLineItemRow();
+        }
     }
 });

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    @page {
+        size: letter;
+        margin: 1.35in 0.5in 0.95in 0.5in;
+
+        @frame header_frame {
+            -pdf-frame-content: header_content;
+            left: 0.5in;
+            width: 7.5in;
+            top: 0.4in;
+            height: 1.0in;
+        }
+        @frame footer_frame {
+            -pdf-frame-content: footer_content;
+            left: 0.5in;
+            width: 7.5in;
+            top: 10.25in;
+            height: 1in;
+        }
+    }
+
+    body {
+        font-family: Times-Roman, serif;
+        font-size: 11pt;
+        color: #000;
+        line-height: 1.2;
+    }
+
+    td {
+        vertical-align: top;
+    }
+
+    /* Header */
+    .header-table {
+        width: 100%;
+        border: none;
+	margin-bottom: 10px;
+    }
+
+    .logo-img {
+        height: 0.75in;
+        width: auto;
+    }
+
+    /* Top info layout */
+    .top-layout-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 24px;
+    }
+
+    .top-left {
+        width: 42%;
+    }
+
+    .customer-block {
+        margin-top: 15px;
+	padding-top: 9px;
+    }
+
+    .top-center {
+        width: 18%;
+    }
+
+    .top-right {
+        width: 40%;
+        text-align: right;
+    }
+
+    .quote-title {
+        font-size: 16pt;
+        font-weight: bold;
+        margin-bottom: 12px;
+        text-align: center;
+    }
+
+    .meta-right-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .meta-right-label {
+        text-align: right;
+        font-weight: bold;
+        padding-right: 8px;
+        white-space: nowrap;
+        width: 45%;
+    }
+
+    .meta-right-value {
+        text-align: left;
+        padding-left: 8px;
+        white-space: nowrap;
+        width: 55%;
+    }
+
+    /* Customer Info */
+    .customer-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .customer-label {
+        font-weight: bold;
+        width: 1.20in;
+        white-space: nowrap;
+    }
+
+    /* Line Items */
+    .intro-text {
+        margin-bottom: 10px;
+    }
+
+    .validity-text {
+	font-style: italic;
+	font-size: 9.25pt;
+	text-align: center;
+	margin-top: 10px;
+        margin-bottom: 7px;
+    }
+
+    .line-items-table {
+        width: 100%;
+        border: 0.5px solid grey;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+    }
+
+    .line-items-table th {
+        background-color: #93acc4;
+        font-weight: bold;
+        text-align: left;
+        padding: 4px;
+        border: 0.5px solid grey;
+        font-size: 10pt;
+    }
+
+    .line-items-table td {
+        padding: 4px;
+        border-bottom: 0.5px solid grey;
+        border-left: 0.5px solid grey;
+        border-right: 0.5px solid grey;
+        font-size: 10pt;
+    }
+
+    .col-item {
+        width: 0.95in;
+    }
+
+    .col-desc {
+        width: 4.5in;
+    }
+
+    .col-qty {
+        width: 0.45in;
+        text-align: center;
+    }
+
+    .col-price {
+        width: 0.95in;
+        text-align: center;
+    }
+
+    .col-ext {
+        width: 0.97in;
+        text-align: center;
+    }
+
+    .desc-text {
+        font-family: Times-Roman, serif;
+    }
+
+    .desc-lead {
+        font-style: italic;
+    }
+
+    /* Total */
+    .total-table {
+        background-color: #f5f5f5;
+        border: 0.75px solid black;
+        border-collapse: collapse;
+    }
+
+    .total-table td {
+        padding: 4px;
+        text-align: center;
+	vertical-align: middle;
+    }
+
+    .total-label {
+        width: 1.0in;
+    }
+
+    .total-value {
+        width: 1.1in;
+        font-weight: bold;
+	text-align: center;
+	vertical-align: middle;
+    }
+
+    /* Notes */
+    .notes-section {
+        margin-top: 8px;
+        font-size: 10pt;
+        line-height: 1.15;
+    }
+
+    .notes-title {
+	font-weight: bold;
+	margin-bottom: 0px;
+    }
+
+    .notes-heading-first {
+        margin-top: 4px;
+        margin-bottom: 1px;
+	border-top: 0.35px solid #999;
+	padding-top: 12px;
+        font-weight: bold;
+    }
+
+    .notes-heading {
+        margin-top: 4px;
+        margin-bottom: 1px;
+        font-weight: bold;
+    }
+
+    .notes-list {
+        margin: 0;
+        padding-left: 12px;
+    }
+
+    .notes-list li {
+        margin-bottom: 2px;
+    }
+
+    /* Signatures */
+    .signature-block {
+        margin-top: 2.5px;
+	line-height: 1.0;
+    }
+
+    .signature-line {
+        margin-bottom: 0px;
+	line-height: 1.0;
+    }
+
+    /* Footer */
+    .footer-container {
+        text-align: center;
+        font-family: Helvetica, sans-serif;
+	line-height: 1.05;
+    }
+
+    .footer-tagline {
+        color: #00508f;
+        font-weight: bold;
+        font-size: 9pt;
+	margin-bottom: 2px;
+    }
+
+    .footer-line {
+        font-size: 9pt;
+        color: #000;
+        margin: 0;
+    }
+</style>
+</head>
+<body>
+
+<div id="header_content">
+    <table class="header-table">
+        <tr>
+            <td style="width: 50%;">
+                {% if logo_path %}
+                <img src="{{ logo_path }}" class="logo-img" />
+                {% endif %}
+            </td>
+            <td style="width: 50%; vertical-align: middle; text-align: right; color: #00508f; font-weight: bold; font-family: Helvetica, sans-serif; font-size: 10pt;">
+                THE INDUSTRIAL DISTRIBUTION EXPERTS
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div id="footer_content">
+    <div class="footer-container">
+        <div class="footer-tagline">{{ footer_info.tagline }}</div>
+        {% if footer_info.address %}
+        <div class="footer-line">{{ footer_info.address }}</div>
+        {% endif %}
+        {% if footer_info.phone_fax %}
+        <div class="footer-line">{{ footer_info.phone_fax }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<table class="top-layout-table">
+    <tr>
+        <td class="top-left">
+	    <div class="customer-block">
+            <table class="customer-table">
+                <tr>
+                    <td class="customer-label">Customer:</td>
+                    <td>{{ quote.customer }}</td>
+                </tr>
+                <tr>
+                    <td class="customer-label">Attention:</td>
+                    <td>
+                        {% if quote.customer_contact %}{{ quote.customer_contact }}<br>{% endif %}
+                        {% if quote.customer_email %}{{ quote.customer_email }}{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="customer-label">Project:</td>
+                    <td>{{ quote.project_description }}</td>
+                </tr>
+            </table>
+	    </div>
+        </td>
+
+        <td class="top-center">
+            &nbsp;
+        </td>
+
+        <td class="top-right">
+            <div class="quote-title">Quotation</div>
+            <table class="meta-right-table">
+                <tr>
+                    <td class="meta-right-label">Quote #:</td>
+                    <td class="meta-right-value">{{ quote.quote_number }}</td>
+                </tr>
+                <tr>
+                    <td class="meta-right-label">Quote Date:</td>
+                    <td class="meta-right-value">{{ quote.date_created }}</td>
+                </tr>
+                <tr>
+                    <td class="meta-right-label">Sales Engineer:</td>
+                    <td class="meta-right-value">{{ sales_engineer_name }}</td>
+                </tr>
+                <tr>
+                    <td class="meta-right-label">Direct Phone:</td>
+                    <td class="meta-right-value">{{ sales_engineer_phone }}</td>
+                </tr>
+                <tr>
+                    <td class="meta-right-label">Direct Email:</td>
+                    <td class="meta-right-value">{{ sales_engineer_email }}</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+{% if intro_text %}
+<div class="intro-text">{{ intro_text }}</div>
+{% endif %}
+
+<table class="line-items-table">
+    <thead>
+        <tr>
+            <th class="col-item">Item</th>
+            <th class="col-desc">Description</th>
+            <th class="col-qty">Qty</th>
+            <th class="col-price">Unit Price</th>
+            <th class="col-ext">Ext. Price</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in quote.line_items %}
+        <tr>
+            <td class="col-item" style="font-weight: bold;">{{ item.item_name }}</td>
+            <td class="col-desc desc-text">
+                {% if item.item_description %}{{ item.item_description }}<br>{% endif %}
+                {% if item.item_long_description %}{{ item.item_long_description | replace('\r\n', '\n') | replace('\n', '<br/>') | safe }}<br>{% endif %}
+                {% if item.lead_time %}<span class="desc-lead">Lead Time: {{ item.lead_time }}</span>{% endif %}
+            </td>
+            <td class="col-qty" style="font-weight: bold;">{{ item.quantity }}</td>
+            <td class="col-price" style="font-weight: bold;">${{ "{:,.2f}".format(item.sell_price_each) }}</td>
+            <td class="col-ext" style="font-weight: bold;">${{ "{:,.2f}".format(item.line_total) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+        <td width="70%">&nbsp;</td>
+        <td width="30%" align="right">
+            <table class="total-table" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                    <td class="total-label">Quote Total</td>
+                    <td class="total-value">${{ "{:,.2f}".format(quote.quote_total) }}</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+{% if validity_text %}
+<div class="validity-text">{{ validity_text }}</div>
+{% endif %}
+
+<div class="notes-section">
+
+    <div class="notes-heading-first" >Price</div>
+    <ul class="notes-list">
+        <li>Payment Terms: Net 30</li>
+        <li>Pricing subject to change at time of order due to government imposed tariffs</li>
+    </ul>
+
+    <div class="notes-heading">Freight</div>
+    <ul class="notes-list">
+        <li>Freight Terms: Prepaid and Add</li>
+        <li>Shipping Point and FOB point manufacturer’s factory</li>
+        <li>Freight, shipping and handling, rigging, export crating and loading/off loading is not included (unless otherwise noted)</li>
+    </ul>
+
+    <div class="notes-heading">Lead Time</div>
+    <ul class="notes-list">
+        <li>Delivery: (See Above) Days after written acceptance of purchase order and upon full release of equipment and manufacturing</li>
+        <li>Deliveries quoted ARO are based on a two week turn-around of approved drawings (if applicable) from date of initial submittal, any delays will postpone delivery</li>
+        <li>Delivery is based upon acceptance of purchase order by seller and having full release to procure long lead items upon acceptance</li>
+    </ul>
+
+    <div class="notes-heading">Confidentiality</div>
+    <ul class="notes-list">
+        <li>This quote, including attachments, is confidential and intended solely for use by the recipient to whom it is addressed and the end user noted herein. Do not copy, forward or disclose this quote in whole or in part without permission from DXP Enterprises, Inc.</li>
+    </ul>
+</div>
+
+<div class="signature-block">
+    {% for line in signature_lines %}
+        {% if line.strip() %}
+            <div class="signature-line">{{ line }}</div>
+        {% else %}
+            <br>
+        {% endif %}
+    {% endfor %}
+</div>
+
+</body>
+</html>
