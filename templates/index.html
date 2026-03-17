@@ -45,6 +45,22 @@
                     </div>
 
 <div class="form-grid">
+    {% if edit_mode and quote %}
+    <div class="field">
+        <label for="quoteNumber">Quote Number</label>
+        <input
+            type="text"
+            id="quoteNumber"
+            name="quoteNumber"
+            placeholder="Enter quote number"
+            value="{{ quote.quote_number }}"
+            maxlength="50"
+            pattern="[A-Za-z0-9-]+"
+            required
+        >
+    </div>
+    {% endif %}
+
     <div class="field">
         <label for="branchId">Branch ID</label>
         <select id="branchId" name="branchId" required>

@@ -280,6 +280,21 @@ def get_branch_ids(settings: dict) -> set[str]:
     }
 
 
+def validate_quote_number(value: str) -> tuple[str | None, str | None]:
+    quote_number = str(value or "").strip()
+
+    if not quote_number:
+        return None, "Quote number is required."
+
+    if len(quote_number) > 50:
+        return None, "Quote number must be 50 characters or fewer."
+
+    if not re.fullmatch(r"[A-Za-z0-9-]+", quote_number):
+        return None, "Quote number can only contain letters, numbers, and hyphens."
+
+    return quote_number, None
+
+
 @app.route("/")
 def landing_page():
     return render_template("landing.html")
@@ -494,7 +509,16 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
         if not existing_quote_obj:
             return None, f"Quote not found: {existing_quote_number}"
 
-        quote_number = existing_quote_number
+        requested_quote_number = data.get("quote_number", existing_quote_number)
+        quote_number, quote_number_error = validate_quote_number(requested_quote_number)
+        if quote_number_error:
+            return None, quote_number_error
+
+        if quote_number != existing_quote_number:
+            conflicting_quote = Quote.query.filter_by(quote_number=quote_number).first()
+            if conflicting_quote:
+                return None, f"Quote number already exists: {quote_number}"
+
         date_created = existing_quote_obj.date_created or datetime.now().strftime("%Y-%m-%d")
         existing_attachments_db = [a.filename for a in existing_quote_obj.attachments]
         final_attachments = list(set(attachments_from_form).intersection(set(existing_attachments_db)))
@@ -817,6 +841,7 @@ def save_quote():
 
 @app.route("/update-quote/<quote_number>", methods=["PUT"])
 def update_quote(quote_number):
+    renamed_upload_dir = False
     try:
         data_str = request.form.get("data")
         if data_str:
@@ -835,9 +860,19 @@ def update_quote(quote_number):
         if error_message:
             return jsonify({"status": "error", "message": error_message}), 400
 
+        renamed_quote_number = quote_data["quote_number"]
+        old_upload_dir = UPLOAD_DIR / quote_number
+        new_upload_dir = UPLOAD_DIR / renamed_quote_number
+
+        if renamed_quote_number != quote_number and old_upload_dir.exists():
+            if new_upload_dir.exists():
+                return jsonify({"status": "error", "message": f"Attachment folder already exists for {renamed_quote_number}."}), 400
+            shutil.move(str(old_upload_dir), str(new_upload_dir))
+            renamed_upload_dir = True
+
         files = request.files.getlist("attachments")
         if files:
-            quote_upload_dir = UPLOAD_DIR / quote_data["quote_number"]
+            quote_upload_dir = UPLOAD_DIR / renamed_quote_number
             quote_upload_dir.mkdir(parents=True, exist_ok=True)
             saved_files = []
 
@@ -851,6 +886,7 @@ def update_quote(quote_number):
 
             quote_data["attachments"].extend(saved_files)
 
+        quote_obj.quote_number = renamed_quote_number
         quote_obj.branch_id = quote_data.get("branch_id")
         quote_obj.customer = quote_data.get("customer")
         quote_obj.customer_contact = quote_data.get("customer_contact")
@@ -894,9 +930,13 @@ def update_quote(quote_number):
 
     except ValueError as e:
         db.session.rollback()
+        if renamed_upload_dir and new_upload_dir.exists() and not old_upload_dir.exists():
+            shutil.move(str(new_upload_dir), str(old_upload_dir))
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         db.session.rollback()
+        if renamed_upload_dir and new_upload_dir.exists() and not old_upload_dir.exists():
+            shutil.move(str(new_upload_dir), str(old_upload_dir))
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
 

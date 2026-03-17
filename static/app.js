@@ -7,8 +7,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const formMessage = document.getElementById("formMessage");
     const saveQuoteBtn = document.getElementById("saveQuoteBtn");
     const deleteQuoteBtn = document.getElementById("deleteQuoteBtn");
-    const existingQuoteNumber = document.getElementById("existingQuoteNumber")?.value?.trim() || "";
-    const isEditMode = Boolean(existingQuoteNumber);
+    const existingQuoteNumberInput = document.getElementById("existingQuoteNumber");
+    const editableQuoteNumberInput = document.getElementById("quoteNumber");
+    let currentQuoteNumber = existingQuoteNumberInput?.value?.trim() || "";
+    const isEditMode = Boolean(currentQuoteNumber);
     const config = window.quoteEditorConfig || { editMode: false, quote: null };
     const DRAFT_KEY = "quoteToolDraftData";
 
@@ -368,6 +370,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 line_items: lineItems
             };
 
+            if (isEditMode && editableQuoteNumberInput) {
+                payload.quote_number = editableQuoteNumberInput.value.trim();
+            }
+
             const formData = new FormData();
             formData.append("data", JSON.stringify(payload));
 
@@ -379,7 +385,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const endpoint = isEditMode
-                ? `/update-quote/${encodeURIComponent(existingQuoteNumber)}`
+                ? `/update-quote/${encodeURIComponent(currentQuoteNumber)}`
                 : "/save-quote";
             const method = isEditMode ? "PUT" : "POST";
 
@@ -411,8 +417,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 `${isEditMode ? "Quote updated" : "Quote saved"}: ${result.quote_number}. Total: ${formatCurrency(result.quote_total)}`
             );
 
-            if (!isEditMode && result.edit_url) {
-                clearDraft();
+            if (result.edit_url) {
+                if (isEditMode) {
+                    currentQuoteNumber = result.quote_number;
+                    if (existingQuoteNumberInput) {
+                        existingQuoteNumberInput.value = result.quote_number;
+                    }
+                    if (editableQuoteNumberInput) {
+                        editableQuoteNumberInput.value = result.quote_number;
+                    }
+                } else {
+                    clearDraft();
+                }
+
                 window.history.replaceState({}, "", result.edit_url);
             }
 
@@ -426,10 +443,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    if (deleteQuoteBtn && existingQuoteNumber) {
+    if (deleteQuoteBtn && currentQuoteNumber) {
         deleteQuoteBtn.addEventListener("click", async () => {
             const confirmed = window.confirm(
-                `Delete quote ${existingQuoteNumber}? This cannot be undone.`
+                `Delete quote ${currentQuoteNumber}? This cannot be undone.`
             );
 
             if (!confirmed) {
@@ -441,7 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 deleteQuoteBtn.textContent = "Deleting...";
 
                 const response = await fetch(
-                    `/delete-quote/${encodeURIComponent(existingQuoteNumber)}`,
+                    `/delete-quote/${encodeURIComponent(currentQuoteNumber)}`,
                     { method: "DELETE" }
                 );
 
