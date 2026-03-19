@@ -26,6 +26,7 @@ def get_local_appdata_root() -> Path:
 if getattr(sys, "frozen", False):
     BUNDLE_DIR = Path(sys._MEIPASS)
     EXE_DIR = Path(sys.executable).parent
+    use_external_assets = os.environ.get("QUOTE_TOOL_USE_EXTERNAL_ASSETS") == "1"
 
     # Persistent app data now lives in Local AppData, not beside the EXE
     APPDATA_ROOT = get_local_appdata_root()
@@ -36,12 +37,13 @@ if getattr(sys, "frozen", False):
     LEGACY_DATA_DIR = EXE_DIR / "data"
     LEGACY_OUTPUT_DIR = EXE_DIR / "output"
 
-    # Still allow external editable templates/static next to the EXE
+    # Prefer bundled assets so stale files beside the EXE do not override new builds.
+    # External assets can still be used explicitly by setting QUOTE_TOOL_USE_EXTERNAL_ASSETS=1.
     EXTERNAL_TEMPLATES = EXE_DIR / "templates"
-    TEMPLATE_PATH = str(EXTERNAL_TEMPLATES) if EXTERNAL_TEMPLATES.exists() else str(BUNDLE_DIR / "templates")
+    TEMPLATE_PATH = str(EXTERNAL_TEMPLATES) if use_external_assets and EXTERNAL_TEMPLATES.exists() else str(BUNDLE_DIR / "templates")
 
     EXTERNAL_STATIC = EXE_DIR / "static"
-    STATIC_PATH = str(EXTERNAL_STATIC) if EXTERNAL_STATIC.exists() else str(BUNDLE_DIR / "static")
+    STATIC_PATH = str(EXTERNAL_STATIC) if use_external_assets and EXTERNAL_STATIC.exists() else str(BUNDLE_DIR / "static")
 else:
     BUNDLE_DIR = Path(__file__).resolve().parent
     DATA_DIR = BUNDLE_DIR / "data"

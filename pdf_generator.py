@@ -62,9 +62,10 @@ def build_quote_pdf(
         BUNDLE_DIR = Path(sys._MEIPASS)
         EXE_DIR = Path(sys.executable).parent
         DATA_DIR = EXE_DIR / "data"
-        # Prioritize external templates folder if it exists next to the .exe
+        use_external_assets = os.environ.get("QUOTE_TOOL_USE_EXTERNAL_ASSETS") == "1"
+        # Prefer bundled templates unless external assets are explicitly enabled.
         external_templates = EXE_DIR / "templates"
-        template_dir = str(external_templates) if external_templates.exists() else str(BUNDLE_DIR / "templates")
+        template_dir = str(external_templates) if use_external_assets and external_templates.exists() else str(BUNDLE_DIR / "templates")
     else:
         BUNDLE_DIR = Path(__file__).resolve().parent
         DATA_DIR = BUNDLE_DIR / "data"
