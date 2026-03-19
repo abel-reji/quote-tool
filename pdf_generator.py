@@ -3,6 +3,7 @@ from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 from pypdf import PdfWriter
 import io
+import os
 import sys
 
 def get_branch_footer(settings: dict, branch_id: str) -> dict:
