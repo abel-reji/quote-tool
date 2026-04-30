@@ -14,12 +14,22 @@
                     <div class="page-breadcrumbs">
                         <a href="/">Home</a>
                         <span>/</span>
-                        <span>{% if edit_mode %}Edit Quote{% else %}New Quote{% endif %}</span>
+                        <span>{% if edit_mode %}Edit Quote{% elif entry_mode == 'p21' %}Enter P21 Quote{% else %}New Quote{% endif %}</span>
                     </div>
-                    <h1>{% if edit_mode %}Edit Quote {{ quote.quote_number }}{% else %}Quoting Tool{% endif %}</h1>
+                    <h1>
+                        {% if edit_mode %}
+                            Edit Quote {{ quote.quote_number }}
+                        {% elif entry_mode == 'p21' %}
+                            Enter P21 Quote
+                        {% else %}
+                            Quoting Tool
+                        {% endif %}
+                    </h1>
                     <p class="page-subtitle">
                         {% if edit_mode %}
                         Update quote details, revise line items, and regenerate the PDF.
+                        {% elif entry_mode == 'p21' %}
+                        Enter an externally created P21 quote manually so it appears in your dashboard and reporting.
                         {% else %}
                         Build customer quotes quickly, calculate pricing live, and generate a PDF in one step.
                         {% endif %}
@@ -45,7 +55,7 @@
                     </div>
 
 <div class="form-grid">
-    {% if edit_mode and quote %}
+    {% if edit_mode or entry_mode == 'p21' %}
     <div class="field">
         <label for="quoteNumber">Quote Number</label>
         <input
@@ -53,9 +63,22 @@
             id="quoteNumber"
             name="quoteNumber"
             placeholder="Enter quote number"
-            value="{{ quote.quote_number }}"
+            value="{{ quote.quote_number if quote else '' }}"
             maxlength="50"
-            pattern="[A-Za-z0-9-]+"
+            pattern="[A-Za-z0-9._/-]+"
+            required
+        >
+    </div>
+    {% endif %}
+
+    {% if edit_mode or entry_mode == 'p21' %}
+    <div class="field">
+        <label for="dateCreated">Date Created</label>
+        <input
+            type="date"
+            id="dateCreated"
+            name="dateCreated"
+            value="{{ quote.date_created if quote else '' }}"
             required
         >
     </div>
@@ -260,6 +283,7 @@
     <script>
         window.quoteEditorConfig = {
             editMode: {{ 'true' if edit_mode else 'false' }},
+            entryMode: {{ entry_mode|tojson }},
             quote: {{ quote|tojson if quote else 'null' }}
         };
     </script>

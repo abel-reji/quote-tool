@@ -9,10 +9,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const deleteQuoteBtn = document.getElementById("deleteQuoteBtn");
     const existingQuoteNumberInput = document.getElementById("existingQuoteNumber");
     const editableQuoteNumberInput = document.getElementById("quoteNumber");
+    const dateCreatedInput = document.getElementById("dateCreated");
     let currentQuoteNumber = existingQuoteNumberInput?.value?.trim() || "";
     const isEditMode = Boolean(currentQuoteNumber);
-    const config = window.quoteEditorConfig || { editMode: false, quote: null };
-    const DRAFT_KEY = "quoteToolDraftData";
+    const config = window.quoteEditorConfig || { editMode: false, entryMode: "app", quote: null };
+    const entryMode = config.entryMode || "app";
+    const isP21Mode = entryMode === "p21";
+    const DRAFT_KEY = `quoteToolDraftData:${entryMode}`;
 
     function parseNumericValue(value) {
         if (value === null || value === undefined) return 0;
@@ -290,7 +293,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const selectedDisposition = document.querySelector('input[name="disposition"]:checked');
 
         const draftData = {
+            entry_type: entryMode,
             branch_id: document.getElementById("branchId").value,
+            quote_number: editableQuoteNumberInput ? editableQuoteNumberInput.value : "",
+            date_created: dateCreatedInput ? dateCreatedInput.value : "",
             customer: document.getElementById("customer").value,
             customer_contact: document.getElementById("customerContact").value,
             customer_email: document.getElementById("customerEmail").value,
@@ -316,6 +322,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const draftData = JSON.parse(draftJson);
 
             if (draftData.branch_id) document.getElementById("branchId").value = draftData.branch_id;
+            if (editableQuoteNumberInput && draftData.quote_number) editableQuoteNumberInput.value = draftData.quote_number;
+            if (dateCreatedInput && draftData.date_created) dateCreatedInput.value = draftData.date_created;
             if (draftData.customer) document.getElementById("customer").value = draftData.customer;
             if (draftData.customer_contact) document.getElementById("customerContact").value = draftData.customer_contact;
             if (draftData.customer_email) document.getElementById("customerEmail").value = draftData.customer_email;
@@ -361,6 +369,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const selectedDisposition = document.querySelector('input[name="disposition"]:checked');
 
             const payload = {
+                entry_type: entryMode,
                 branch_id: document.getElementById("branchId").value,
                 customer: document.getElementById("customer").value.trim(),
                 customer_contact: document.getElementById("customerContact").value.trim(),
@@ -371,6 +380,21 @@ document.addEventListener("DOMContentLoaded", () => {
             };
 
             if (isEditMode && editableQuoteNumberInput) {
+                payload.quote_number = editableQuoteNumberInput.value.trim();
+            }
+
+            if ((isEditMode || isP21Mode) && editableQuoteNumberInput && !editableQuoteNumberInput.value.trim()) {
+                throw new Error("Quote number is required.");
+            }
+
+            if ((isEditMode || isP21Mode) && dateCreatedInput) {
+                if (!dateCreatedInput.value) {
+                    throw new Error("Date created is required.");
+                }
+                payload.date_created = dateCreatedInput.value;
+            }
+
+            if (isP21Mode && editableQuoteNumberInput) {
                 payload.quote_number = editableQuoteNumberInput.value.trim();
             }
 

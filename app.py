@@ -3,6 +3,7 @@ from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 from datetime import datetime
+from sqlalchemy import text
 import json
 import csv
 import re
@@ -127,6 +128,7 @@ db = SQLAlchemy(app)
 class Quote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     quote_number = db.Column(db.String(50), unique=True, nullable=False)
+    entry_type = db.Column(db.String(20), default="app")
     branch_id = db.Column(db.String(50))
     date_created = db.Column(db.String(50))
     customer = db.Column(db.String(255))
@@ -142,6 +144,7 @@ class Quote(db.Model):
     def to_dict(self):
         return {
             "quote_number": self.quote_number,
+            "entry_type": self.entry_type or "app",
             "branch_id": self.branch_id,
             "date_created": self.date_created,
             "customer": self.customer,
@@ -291,10 +294,28 @@ def validate_quote_number(value: str) -> tuple[str | None, str | None]:
     if len(quote_number) > 50:
         return None, "Quote number must be 50 characters or fewer."
 
-    if not re.fullmatch(r"[A-Za-z0-9-]+", quote_number):
-        return None, "Quote number can only contain letters, numbers, and hyphens."
+    if not re.fullmatch(r"[A-Za-z0-9._/-]+", quote_number):
+        return None, "Quote number can only contain letters, numbers, hyphens, underscores, periods, and slashes."
 
     return quote_number, None
+
+
+def validate_date_created(value: str) -> tuple[str | None, str | None]:
+    date_created = str(value or "").strip()
+
+    if not date_created:
+        return None, "Date created is required."
+
+    try:
+        parsed = datetime.strptime(date_created, "%Y-%m-%d")
+    except ValueError:
+        return None, "Date created must be a valid date in YYYY-MM-DD format."
+
+    return parsed.strftime("%Y-%m-%d"), None
+
+
+def normalize_entry_type(value: str | None) -> str:
+    return "p21" if str(value or "").strip().lower() == "p21" else "app"
 
 
 @app.route("/")
@@ -305,7 +326,13 @@ def landing_page():
 @app.route("/quote-tool")
 def quote_tool():
     settings = load_settings()
-    return render_template("index.html", edit_mode=False, quote=None, settings=settings)
+    return render_template("index.html", edit_mode=False, quote=None, settings=settings, entry_mode="app")
+
+
+@app.route("/p21-quote")
+def p21_quote_tool():
+    settings = load_settings()
+    return render_template("index.html", edit_mode=False, quote=None, settings=settings, entry_mode="p21")
 
 
 @app.route("/quotes/<quote_number>/edit")
@@ -315,7 +342,7 @@ def edit_quote_page(quote_number):
         return f"Quote file not found: {quote_number}", 404
 
     settings = load_settings()
-    return render_template("index.html", edit_mode=True, quote=quote, settings=settings)
+    return render_template("index.html", edit_mode=True, quote=quote, settings=settings, entry_mode=quote.get("entry_type", "app"))
 
 
 @app.route("/settings")
@@ -474,6 +501,7 @@ def delete_quote_data(quote_number: str):
 def build_quote_payload(data: dict, existing_quote_number: str | None = None) -> tuple[dict | None, str | None]:
     settings = load_settings()
 
+    entry_type = normalize_entry_type(data.get("entry_type"))
     branch_id = str(data.get("branch_id", "")).strip()
     customer = str(data.get("customer", "")).strip()
     customer_contact = str(data.get("customer_contact", "")).strip()
@@ -511,6 +539,7 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
         if not existing_quote_obj:
             return None, f"Quote not found: {existing_quote_number}"
 
+        entry_type = normalize_entry_type(data.get("entry_type", existing_quote_obj.entry_type or "app"))
         requested_quote_number = data.get("quote_number", existing_quote_number)
         quote_number, quote_number_error = validate_quote_number(requested_quote_number)
         if quote_number_error:
@@ -521,16 +550,33 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
             if conflicting_quote:
                 return None, f"Quote number already exists: {quote_number}"
 
-        date_created = existing_quote_obj.date_created or datetime.now().strftime("%Y-%m-%d")
+        requested_date_created = data.get("date_created", existing_quote_obj.date_created or datetime.now().strftime("%Y-%m-%d"))
+        date_created, date_created_error = validate_date_created(requested_date_created)
+        if date_created_error:
+            return None, date_created_error
         existing_attachments_db = [a.filename for a in existing_quote_obj.attachments]
         final_attachments = list(set(attachments_from_form).intersection(set(existing_attachments_db)))
     else:
-        quote_number = generate_quote_number(branch_id, settings)
-        date_created = datetime.now().strftime("%Y-%m-%d")
+        if entry_type == "p21":
+            quote_number, quote_number_error = validate_quote_number(data.get("quote_number"))
+            if quote_number_error:
+                return None, quote_number_error
+
+            conflicting_quote = Quote.query.filter_by(quote_number=quote_number).first()
+            if conflicting_quote:
+                return None, f"Quote number already exists: {quote_number}"
+
+            date_created, date_created_error = validate_date_created(data.get("date_created"))
+            if date_created_error:
+                return None, date_created_error
+        else:
+            quote_number = generate_quote_number(branch_id, settings)
+            date_created = datetime.now().strftime("%Y-%m-%d")
         final_attachments = []
 
     return {
         "quote_number": quote_number,
+        "entry_type": entry_type,
         "branch_id": branch_id,
         "date_created": date_created,
         "customer": customer,
@@ -773,6 +819,7 @@ def save_quote():
 
         quote_obj = Quote(
             quote_number=quote_number,
+            entry_type=quote_data.get("entry_type", "app"),
             branch_id=quote_data.get("branch_id"),
             date_created=quote_data.get("date_created"),
             customer=quote_data.get("customer"),
@@ -889,7 +936,9 @@ def update_quote(quote_number):
             quote_data["attachments"].extend(saved_files)
 
         quote_obj.quote_number = renamed_quote_number
+        quote_obj.entry_type = quote_data.get("entry_type", quote_obj.entry_type or "app")
         quote_obj.branch_id = quote_data.get("branch_id")
+        quote_obj.date_created = quote_data.get("date_created")
         quote_obj.customer = quote_data.get("customer")
         quote_obj.customer_contact = quote_data.get("customer_contact")
         quote_obj.customer_email = quote_data.get("customer_email")
@@ -992,6 +1041,15 @@ def auto_launch_browser():
 def init_db():
     with app.app_context():
         db.create_all()
+        columns = {
+            row[1]
+            for row in db.session.execute(text("PRAGMA table_info(quote)")).fetchall()
+        }
+
+        if "entry_type" not in columns:
+            db.session.execute(text("ALTER TABLE quote ADD COLUMN entry_type VARCHAR(20) DEFAULT 'app'"))
+            db.session.execute(text("UPDATE quote SET entry_type = 'app' WHERE entry_type IS NULL OR entry_type = ''"))
+            db.session.commit()
 
         # Optional migration from legacy JSON quote files
         if Quote.query.count() == 0 and QUOTES_DIR.exists():
@@ -1009,6 +1067,7 @@ def init_db():
 
                     q_obj = Quote(
                         quote_number=quote_number,
+                        entry_type=normalize_entry_type(q_data.get("entry_type")),
                         branch_id=q_data.get("branch_id"),
                         date_created=q_data.get("date_created"),
                         customer=q_data.get("customer"),
