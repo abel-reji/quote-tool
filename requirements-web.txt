@@ -1,0 +1,5 @@
+# Minimal runtime tested locally. No PyInstaller or unused WeasyPrint stack.
+Flask==3.1.3
+Flask-SQLAlchemy==3.1.1
+xhtml2pdf==0.2.17
+pypdf==6.7.5

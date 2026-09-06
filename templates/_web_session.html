@@ -1,0 +1,6 @@
+{% if web_mode and web_signed_in %}
+<form method="post" action="{{ url_for('web_logout') }}" style="padding: 1rem; text-align: right;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="secondary-btn">Sign Out</button>
+</form>
+{% endif %}

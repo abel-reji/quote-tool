@@ -10,11 +10,21 @@ import re
 import sys
 import os
 import shutil
+import math
+import tempfile
+import io
+from copy import deepcopy
+from quote_pricing import calculate_item
+from storage_lock import install_storage_lock
+from markupsafe import escape
+from storage_paths import private_child
+from web_security import load_web_config, install_web_security
 
 from pdf_generator import build_quote_pdf
 
 
 APP_FOLDER_NAME = "Quote Tool"
+WEB_CONFIG = load_web_config()
 
 
 def get_local_appdata_root() -> Path:
@@ -54,7 +64,16 @@ else:
     TEMPLATE_PATH = str(BUNDLE_DIR / "templates")
     STATIC_PATH = str(BUNDLE_DIR / "static")
 
+if WEB_CONFIG:
+    DATA_DIR = WEB_CONFIG["storage_root"] / "data"
+    OUTPUT_DIR = WEB_CONFIG["storage_root"] / "output"
+elif os.environ.get("QUOTE_TOOL_STORAGE_ROOT"):
+    # Explicit isolated storage also makes desktop regression tests safe.
+    storage_root = Path(os.environ["QUOTE_TOOL_STORAGE_ROOT"]).resolve()
+    DATA_DIR, OUTPUT_DIR = storage_root / "data", storage_root / "output"
+
 app = Flask(__name__, template_folder=TEMPLATE_PATH, static_folder=STATIC_PATH)
+install_web_security(app, WEB_CONFIG)
 
 QUOTES_DIR = DATA_DIR / "quotes"
 CUSTOMERS_FILE = DATA_DIR / "customers.json"
@@ -66,6 +85,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 QUOTES_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+install_storage_lock(app, DATA_DIR.parent)
 
 
 def migrate_legacy_storage_if_needed():
@@ -73,7 +93,7 @@ def migrate_legacy_storage_if_needed():
     On the first run of the rebuilt EXE, move persistent data from the old
     EXE-adjacent /data folder into Local AppData.
     """
-    if not getattr(sys, "frozen", False):
+    if WEB_CONFIG or os.environ.get("QUOTE_TOOL_STORAGE_ROOT") or not getattr(sys, "frozen", False):
         return
 
     if not LEGACY_DATA_DIR.exists() or LEGACY_DATA_DIR.resolve() == DATA_DIR.resolve():
@@ -138,8 +158,8 @@ class Quote(db.Model):
     disposition = db.Column(db.String(50), default="pending")
     quote_total = db.Column(db.Float, default=0.0)
 
-    line_items = db.relationship("LineItem", backref="quote", lazy=True, cascade="all, delete-orphan")
-    attachments = db.relationship("Attachment", backref="quote", lazy=True, cascade="all, delete-orphan")
+    line_items = db.relationship("LineItem", backref="quote", lazy=True, cascade="all, delete-orphan", order_by="LineItem.id")
+    attachments = db.relationship("Attachment", backref="quote", lazy=True, cascade="all, delete-orphan", order_by="Attachment.id")
 
     def to_dict(self):
         return {
@@ -170,6 +190,8 @@ class LineItem(db.Model):
     gross_margin_percent = db.Column(db.Float, default=0.0)
     lead_time = db.Column(db.String(100))
     line_total = db.Column(db.Float, default=0.0)
+    item_type = db.Column(db.String(20), nullable=False, default="single")
+    components = db.Column(db.JSON, nullable=True)
 
     def to_dict(self):
         return {
@@ -182,6 +204,8 @@ class LineItem(db.Model):
             "gross_margin_percent": self.gross_margin_percent,
             "lead_time": self.lead_time,
             "line_total": self.line_total,
+            "item_type": self.item_type or "single",
+            "components": deepcopy(self.components or []),
         }
 
 
@@ -258,8 +282,7 @@ def deep_merge(defaults, incoming):
 
 def ensure_settings_file():
     if not SETTINGS_FILE.exists():
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_SETTINGS, f, indent=2)
+        save_settings(DEFAULT_SETTINGS)
 
 
 def load_settings() -> dict:
@@ -273,8 +296,18 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict):
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2)
+    atomic_json_write(SETTINGS_FILE, settings)
+
+
+def atomic_json_write(path: Path, value):
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".quote-json-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2, allow_nan=False)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def get_branch_ids(settings: dict) -> set[str]:
@@ -294,8 +327,8 @@ def validate_quote_number(value: str) -> tuple[str | None, str | None]:
     if len(quote_number) > 50:
         return None, "Quote number must be 50 characters or fewer."
 
-    if not re.fullmatch(r"[A-Za-z0-9._/-]+", quote_number):
-        return None, "Quote number can only contain letters, numbers, hyphens, underscores, periods, and slashes."
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", quote_number):
+        return None, "Quote number must start with a letter or number and contain only letters, numbers, hyphens, underscores, and periods."
 
     return quote_number, None
 
@@ -339,7 +372,7 @@ def p21_quote_tool():
 def edit_quote_page(quote_number):
     quote = load_quote(quote_number)
     if not quote:
-        return f"Quote file not found: {quote_number}", 404
+        return f"Quote file not found: {escape(quote_number)}", 404
 
     settings = load_settings()
     return render_template("index.html", edit_mode=True, quote=quote, settings=settings, entry_mode=quote.get("entry_type", "app"))
@@ -406,41 +439,7 @@ def generate_quote_number(branch_id: str, settings: dict) -> str:
 
 
 def calculate_line_item(item: dict) -> dict:
-    quantity = safe_int(item.get("quantity"), 1)
-    net_cost_each = safe_float(item.get("net_cost_each"), 0.0)
-    sell_price_each = safe_float(item.get("sell_price_each"), 0.0)
-    gross_margin_percent = safe_float(item.get("gross_margin_percent"), 0.0)
-
-    if quantity <= 0:
-        raise ValueError("Quantity must be greater than zero.")
-
-    if net_cost_each < 0:
-        raise ValueError("Net cost cannot be negative.")
-
-    if sell_price_each <= 0 and gross_margin_percent > 0:
-        margin_decimal = gross_margin_percent / 100.0
-        if margin_decimal >= 1:
-            raise ValueError("Gross margin percent must be less than 100.")
-        sell_price_each = net_cost_each / (1 - margin_decimal)
-    elif gross_margin_percent <= 0 and sell_price_each > 0:
-        gross_margin_percent = ((sell_price_each - net_cost_each) / sell_price_each) * 100.0
-
-    if sell_price_each <= 0:
-        raise ValueError("Sell price must be greater than zero.")
-
-    line_total = quantity * sell_price_each
-
-    return {
-        "item_name": str(item.get("item_name", "")).strip(),
-        "item_description": str(item.get("item_description", "")).strip(),
-        "item_long_description": str(item.get("item_long_description", "")).strip(),
-        "quantity": quantity,
-        "net_cost_each": round(net_cost_each, 2),
-        "sell_price_each": round(sell_price_each, 2),
-        "gross_margin_percent": round(gross_margin_percent, 2),
-        "lead_time": str(item.get("lead_time", "")).strip(),
-        "line_total": round(line_total, 2),
-    }
+    return calculate_item(item)
 
 
 def load_customers() -> list:
@@ -458,8 +457,7 @@ def load_customers() -> list:
 
 
 def save_customers(customers: list):
-    with open(CUSTOMERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(customers, f, indent=2)
+    atomic_json_write(CUSTOMERS_FILE, customers)
 
 
 def add_customer_if_new(customer_name: str):
@@ -489,7 +487,7 @@ def delete_quote_data(quote_number: str):
         db.session.delete(quote_obj)
         db.session.commit()
 
-        quote_upload_dir = UPLOAD_DIR / quote_number
+        quote_upload_dir = private_child(UPLOAD_DIR, quote_number)
         if quote_upload_dir.exists():
             for f in quote_upload_dir.iterdir():
                 f.unlink()
@@ -533,6 +531,8 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
         return None, str(e)
 
     quote_total = round(sum(item["line_total"] for item in processed_line_items), 2)
+    if quote_total > 1000000000:
+        return None, "Quote amount is too large."
 
     if existing_quote_number:
         existing_quote_obj = Quote.query.filter_by(quote_number=existing_quote_number).first()
@@ -555,7 +555,7 @@ def build_quote_payload(data: dict, existing_quote_number: str | None = None) ->
         if date_created_error:
             return None, date_created_error
         existing_attachments_db = [a.filename for a in existing_quote_obj.attachments]
-        final_attachments = list(set(attachments_from_form).intersection(set(existing_attachments_db)))
+        final_attachments = [name for name in existing_attachments_db if name in attachments_from_form]
     else:
         if entry_type == "p21":
             quote_number, quote_number_error = validate_quote_number(data.get("quote_number"))
@@ -719,15 +719,18 @@ def export_quote_log():
         "Date Created",
     ]
 
-    export_path = OUTPUT_DIR / "quote_log_export.csv"
-    with open(export_path, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=export_fieldnames)
-        writer.writeheader()
-        for row in export_rows:
-            writer.writerow({key: row.get(key, "") for key in export_fieldnames})
+    csvfile = io.StringIO(newline="")
+    writer = csv.DictWriter(csvfile, fieldnames=export_fieldnames)
+    writer.writeheader()
+    for row in export_rows:
+        values = {key: row.get(key, "") for key in export_fieldnames}
+        for key, value in values.items():
+            if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+                values[key] = "'" + value
+        writer.writerow(values)
 
     return send_file(
-        export_path,
+        io.BytesIO(csvfile.getvalue().encode("utf-8")),
         as_attachment=True,
         download_name="quote_log_export.csv",
         mimetype="text/csv",
@@ -785,6 +788,12 @@ def preview_pdf():
     settings = load_settings()
 
     try:
+        if WEB_CONFIG:
+            with tempfile.TemporaryDirectory(dir=OUTPUT_DIR) as folder:
+                preview_path = Path(folder) / "preview.pdf"
+                build_quote_pdf(sample_quote, preview_path, settings, upload_root=UPLOAD_DIR)
+                pdf_bytes = preview_path.read_bytes()
+            return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", download_name="preview.pdf")
         build_quote_pdf(
             quote=sample_quote,
             pdf_path=output_path,
@@ -811,6 +820,7 @@ def save_quote():
         if not data:
             return jsonify({"status": "error", "message": "No payload received."}), 400
 
+        db.session.execute(text("BEGIN IMMEDIATE"))
         quote_data, error_message = build_quote_payload(data)
         if error_message:
             return jsonify({"status": "error", "message": error_message}), 400
@@ -844,18 +854,22 @@ def save_quote():
                 gross_margin_percent=li_data.get("gross_margin_percent", 0.0),
                 lead_time=li_data.get("lead_time"),
                 line_total=li_data.get("line_total", 0.0),
+                item_type=li_data.get("item_type", "single"),
+                components=li_data.get("components", []),
             ))
 
         files = request.files.getlist("attachments")
         if files:
-            quote_upload_dir = UPLOAD_DIR / quote_number
+            quote_upload_dir = private_child(UPLOAD_DIR, quote_number)
             quote_upload_dir.mkdir(parents=True, exist_ok=True)
             saved_files = []
 
             for f in files:
                 if f.filename and f.filename.lower().endswith(".pdf"):
                     filename = secure_filename(f.filename)
-                    filepath = quote_upload_dir / filename
+                    if not filename:
+                        raise ValueError("Invalid attachment filename.")
+                    filepath = private_child(quote_upload_dir, filename)
                     f.save(str(filepath))
                     saved_files.append(filename)
                     db.session.add(Attachment(quote_id=quote_obj.id, filename=filename))
@@ -910,8 +924,8 @@ def update_quote(quote_number):
             return jsonify({"status": "error", "message": error_message}), 400
 
         renamed_quote_number = quote_data["quote_number"]
-        old_upload_dir = UPLOAD_DIR / quote_number
-        new_upload_dir = UPLOAD_DIR / renamed_quote_number
+        old_upload_dir = private_child(UPLOAD_DIR, quote_number)
+        new_upload_dir = private_child(UPLOAD_DIR, renamed_quote_number)
 
         if renamed_quote_number != quote_number and old_upload_dir.exists():
             if new_upload_dir.exists():
@@ -921,14 +935,16 @@ def update_quote(quote_number):
 
         files = request.files.getlist("attachments")
         if files:
-            quote_upload_dir = UPLOAD_DIR / renamed_quote_number
+            quote_upload_dir = private_child(UPLOAD_DIR, renamed_quote_number)
             quote_upload_dir.mkdir(parents=True, exist_ok=True)
             saved_files = []
 
             for f in files:
                 if f.filename and f.filename.lower().endswith(".pdf"):
                     filename = secure_filename(f.filename)
-                    filepath = quote_upload_dir / filename
+                    if not filename:
+                        raise ValueError("Invalid attachment filename.")
+                    filepath = private_child(quote_upload_dir, filename)
                     f.save(str(filepath))
                     if filename not in quote_data["attachments"]:
                         saved_files.append(filename)
@@ -960,6 +976,8 @@ def update_quote(quote_number):
                 gross_margin_percent=li_data.get("gross_margin_percent", 0.0),
                 lead_time=li_data.get("lead_time"),
                 line_total=li_data.get("line_total", 0.0),
+                item_type=li_data.get("item_type", "single"),
+                components=li_data.get("components", []),
             ))
 
         existing_attachment_names = {a.filename for a in quote_obj.attachments}
@@ -991,28 +1009,83 @@ def update_quote(quote_number):
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
 
+@app.post("/api/quotes/<quote_number>/duplicate")
+def duplicate_quote(quote_number):
+    created_folder = None
+    try:
+        # Reserve numbering before reading the source so simultaneous duplicates serialize.
+        db.session.execute(text("BEGIN IMMEDIATE"))
+        source = Quote.query.filter_by(quote_number=quote_number).first()
+        if source is None:
+            db.session.rollback()
+            return jsonify(status="error", message="Quote not found."), 404
+        new_number = generate_quote_number(source.branch_id, load_settings())
+        duplicate = Quote(
+            quote_number=new_number, entry_type="app", branch_id=source.branch_id,
+            date_created=datetime.now().strftime("%Y-%m-%d"), disposition="pending",
+            customer=source.customer, customer_contact=source.customer_contact,
+            customer_email=source.customer_email, project_description=source.project_description,
+            quote_total=source.quote_total,
+        )
+        db.session.add(duplicate)
+        db.session.flush()
+        for item in source.line_items:
+            duplicate.line_items.append(LineItem(**item.to_dict()))
+        if source.attachments:
+            target = private_child(UPLOAD_DIR, new_number)
+            target.mkdir()  # Never merge with or overwrite another quote's attachment folder.
+            created_folder = target
+            for attachment in source.attachments:
+                original = private_child(UPLOAD_DIR, quote_number, attachment.filename)
+                if not original.is_file():
+                    raise ValueError("A source attachment is missing; restore it before duplicating.")
+                shutil.copy2(original, private_child(target, attachment.filename))
+                duplicate.attachments.append(Attachment(filename=attachment.filename))
+        db.session.commit()
+        return jsonify(status="success", quote_number=new_number,
+                       edit_url=f"/quotes/{new_number}/edit")
+    except (ValueError, FileExistsError) as error:
+        db.session.rollback()
+        if created_folder:
+            shutil.rmtree(created_folder)
+        return jsonify(status="error", message=str(error)), 400
+    except Exception:
+        db.session.rollback()
+        if created_folder:
+            shutil.rmtree(created_folder)
+        app.logger.exception("Quote duplication failed")
+        return jsonify(status="error", message="Unable to duplicate quote. No copy was saved."), 500
+
+
 @app.route("/generate-pdf/<quote_number>")
 def generate_pdf(quote_number):
     try:
         quote = load_quote(quote_number)
         if not quote:
-            return f"Quote file not found: {quote_number}", 404
+            return f"Quote file not found: {escape(quote_number)}", 404
 
         settings = load_settings()
-        pdf_path = OUTPUT_DIR / f"{quote_number}.pdf"
+        if WEB_CONFIG:
+            # Each request gets its own output so concurrent views cannot overwrite a PDF.
+            with tempfile.TemporaryDirectory(dir=OUTPUT_DIR) as folder:
+                pdf_path = Path(folder) / "quote.pdf"
+                build_quote_pdf(quote, pdf_path, settings, upload_root=UPLOAD_DIR)
+                pdf_bytes = pdf_path.read_bytes()
+            return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf",
+                             download_name=f"{secure_filename(quote_number)}.pdf")
+        pdf_path = private_child(OUTPUT_DIR, f"{quote_number}.pdf")
 
         build_quote_pdf(
             quote=quote,
             pdf_path=pdf_path,
             settings=settings,
+            upload_root=UPLOAD_DIR,
         )
 
         return send_file(pdf_path, as_attachment=False)
 
     except Exception as e:
-        import traceback
-        print("Error in generate_pdf:")
-        traceback.print_exc()
+        app.logger.exception("PDF generation failed")
         return f"PDF generation failed: {str(e)}", 500
 
 
@@ -1041,6 +1114,12 @@ def auto_launch_browser():
 def init_db():
     with app.app_context():
         db.create_all()
+        item_columns = {row[1] for row in db.session.execute(text("PRAGMA table_info(line_item)"))}
+        if "item_type" not in item_columns:
+            db.session.execute(text("ALTER TABLE line_item ADD COLUMN item_type VARCHAR(20) NOT NULL DEFAULT 'single'"))
+        if "components" not in item_columns:
+            db.session.execute(text("ALTER TABLE line_item ADD COLUMN components JSON"))
+        db.session.commit()
         columns = {
             row[1]
             for row in db.session.execute(text("PRAGMA table_info(quote)")).fetchall()
@@ -1092,6 +1171,8 @@ def init_db():
                             gross_margin_percent=li_data.get("gross_margin_percent", 0.0),
                             lead_time=li_data.get("lead_time"),
                             line_total=li_data.get("line_total", 0.0),
+                            item_type=li_data.get("item_type", "single"),
+                            components=li_data.get("components", []),
                         )
                         db.session.add(li_obj)
 
@@ -1107,10 +1188,12 @@ def init_db():
 
 
 if __name__ == "__main__":
+    if WEB_CONFIG:
+        raise SystemExit("Use manage_web.py init and a WSGI deployment; desktop startup is disabled in web mode.")
     ensure_settings_file()
     init_db()
 
     import threading
     threading.Timer(1.5, auto_launch_browser).start()
 
-    app.run(debug=True, use_reloader=False)
+    app.run(host="127.0.0.1", debug=False, use_reloader=False)

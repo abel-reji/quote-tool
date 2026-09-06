@@ -2,6 +2,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const form = document.getElementById("quoteForm");
     const lineItemsContainer = document.getElementById("lineItemsContainer");
     const addLineItemBtn = document.getElementById("addLineItemBtn");
+    const addPackageBtn = document.getElementById("addPackageBtn");
+    const componentTemplate = document.getElementById("packageComponentTemplate");
     const quoteTotalEl = document.getElementById("quoteTotal");
     const lineItemTemplate = document.getElementById("lineItemTemplate");
     const formMessage = document.getElementById("formMessage");
@@ -60,7 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = lineItemsContainer.querySelectorAll(".line-item");
         rows.forEach((row, index) => {
             const title = row.querySelector(".line-item-title");
-            title.textContent = `Line Item ${index + 1}`;
+            title.textContent = `${row.querySelector(".item-type").value === "package" ? "Package" : "Line Item"} ${index + 1}`;
         });
     }
 
@@ -78,6 +80,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateLineTotal(row) {
+        if (row.querySelector(".item-type").value === "package") {
+            let costCents = 0;
+            let sellCents = 0;
+            row.querySelectorAll(".package-component").forEach((component) => {
+                const quantity = Number(component.querySelector(".component-quantity").value || 0);
+                costCents += Math.round(parseNumericValue(component.querySelector(".component-cost").value) * 100) * quantity;
+                sellCents += Math.round(parseNumericValue(component.querySelector(".component-sell").value) * 100) * quantity;
+            });
+            row.querySelector(".net-cost").value = formatCurrency(costCents / 100);
+            row.querySelector(".sell-price").value = formatCurrency(sellCents / 100);
+            row.querySelector(".gross-margin").value = sellCents ? roundToTwo((sellCents - costCents) / sellCents * 100) : 0;
+        }
         const quantity = parseNumericValue(row.querySelector(".quantity").value);
         const sellPrice = parseNumericValue(row.querySelector(".sell-price").value);
         const lineTotal = quantity * sellPrice;
@@ -178,12 +192,62 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function addComponent(row, item = {}) {
+        const component = componentTemplate.content.firstElementChild.cloneNode(true);
+        component.querySelector(".component-name").value = item.item_name || "";
+        component.querySelector(".component-quantity").value = item.quantity ?? 1;
+        component.querySelector(".component-cost").value = item.net_cost_each ?? 0;
+        component.querySelector(".component-sell").value = item.sell_price_each ?? 0;
+        component.querySelector(".remove-component-btn").addEventListener("click", () => {
+            component.remove();
+            updateQuoteTotal();
+            saveDraft();
+        });
+        component.addEventListener("input", () => updateQuoteTotal());
+        row.querySelector(".package-components").appendChild(component);
+    }
+
+    function setItemType(row, type, components = []) {
+        const packaged = type === "package";
+        row.querySelector(".item-type").value = type;
+        row.querySelector(".package-details").hidden = !packaged;
+        row.querySelector(".package-components").replaceChildren();
+        for (const selector of [".net-cost", ".sell-price", ".gross-margin"]) {
+            row.querySelector(selector).readOnly = packaged;
+        }
+        if (packaged) {
+            (components.length ? components : [{}]).forEach((item) => addComponent(row, item));
+        }
+        renumberLineItems();
+        updateQuoteTotal();
+    }
+
     function attachRowListeners(row) {
         const quantityInput = row.querySelector(".quantity");
         const netCostInput = row.querySelector(".net-cost");
         const sellPriceInput = row.querySelector(".sell-price");
         const grossMarginInput = row.querySelector(".gross-margin");
         const removeBtn = row.querySelector(".remove-line-item-btn");
+        row.querySelector(".item-type").addEventListener("change", (event) => {
+            if (event.target.value === "single" && row.querySelectorAll(".package-component").length &&
+                !window.confirm("Convert to a single item? Component details will be removed; the package price will be kept.")) {
+                event.target.value = "package";
+                return;
+            }
+            const components = event.target.value === "package" ? [{
+                item_name: row.querySelector(".item-name").value,
+                quantity: 1,
+                net_cost_each: parseNumericValue(row.querySelector(".net-cost").value),
+                sell_price_each: parseNumericValue(row.querySelector(".sell-price").value)
+            }] : [];
+            setItemType(row, event.target.value, components);
+            saveDraft();
+        });
+        row.querySelector(".add-component-btn").addEventListener("click", () => {
+            addComponent(row);
+            updateQuoteTotal();
+            saveDraft();
+        });
 
         grossMarginInput.addEventListener("input", () => {
             row.dataset.lastEditedPricingField = "margin";
@@ -221,6 +285,7 @@ document.addEventListener("DOMContentLoaded", () => {
         row.querySelector(".sell-price").value = item.sell_price_each ?? "";
         row.querySelector(".gross-margin").value = item.gross_margin_percent ?? "";
         row.querySelector(".lead-time").value = item.lead_time || "";
+        setItemType(row, item.item_type || "single", item.components || []);
 
         formatCurrencyInputsInRow(row);
         updateLineTotal(row);
@@ -248,6 +313,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const rows = lineItemsContainer.querySelectorAll(".line-item");
 
         return Array.from(rows).map((row) => ({
+            item_type: row.querySelector(".item-type").value,
+            components: Array.from(row.querySelectorAll(".package-component")).map((component) => ({
+                item_name: component.querySelector(".component-name").value.trim(),
+                quantity: Number(component.querySelector(".component-quantity").value || 0),
+                net_cost_each: parseNumericValue(component.querySelector(".component-cost").value),
+                sell_price_each: parseNumericValue(component.querySelector(".component-sell").value)
+            })),
             item_name: row.querySelector(".item-name").value.trim(),
             item_description: row.querySelector(".item-description").value.trim(),
             item_long_description: row.querySelector(".item-long-description").value.trim(),
@@ -267,6 +339,15 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let i = 0; i < lineItems.length; i++) {
             const item = lineItems[i];
             const lineNumber = i + 1;
+            if (item.item_type === "package") {
+                if (!item.components.length) throw new Error(`Package ${lineNumber}: Add at least one component.`);
+                for (const component of item.components) {
+                    if (!component.item_name || !Number.isInteger(component.quantity) || component.quantity <= 0 ||
+                        component.net_cost_each < 0 || component.sell_price_each < 0) {
+                        throw new Error(`Package ${lineNumber}: Each component needs a name, a positive whole quantity, and nonnegative prices.`);
+                    }
+                }
+            }
 
             if (!item.item_name) {
                 throw new Error(`Line Item ${lineNumber}: Item Name is required.`);
@@ -287,7 +368,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function saveDraft() {
-        if (isEditMode) return;
+        if (isEditMode || config.webMode) return;
 
         const lineItems = collectLineItems();
         const selectedDisposition = document.querySelector('input[name="disposition"]:checked');
@@ -309,11 +390,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function clearDraft() {
+        if (config.webMode) return;
         localStorage.removeItem(DRAFT_KEY);
     }
 
     function loadDraft() {
-        if (isEditMode) return false;
+        if (isEditMode || config.webMode) return false;
 
         const draftJson = localStorage.getItem(DRAFT_KEY);
         if (!draftJson) return false;
@@ -358,6 +440,13 @@ document.addEventListener("DOMContentLoaded", () => {
         newRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
 
+    addPackageBtn.addEventListener("click", () => {
+        clearMessage();
+        const row = createLineItemRow({item_type: "package", components: []});
+        saveDraft();
+        row.scrollIntoView({behavior: "smooth", block: "nearest"});
+    });
+
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
         clearMessage();
@@ -378,6 +467,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 disposition: selectedDisposition ? selectedDisposition.value : "pending",
                 line_items: lineItems
             };
+
+            if (isEditMode) payload.attachments = config.quote?.attachments || [];
 
             if (isEditMode && editableQuoteNumberInput) {
                 payload.quote_number = editableQuoteNumberInput.value.trim();
@@ -416,7 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
             saveQuoteBtn.disabled = true;
             saveQuoteBtn.textContent = isEditMode ? "Updating Quote..." : "Saving Quote...";
 
-            const response = await fetch(endpoint, {
+            const response = await quoteFetch(endpoint, {
                 method,
                 body: formData
             });
@@ -444,6 +535,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (result.edit_url) {
                 if (isEditMode) {
                     currentQuoteNumber = result.quote_number;
+                    const duplicateButton = document.querySelector("[data-duplicate-number]");
+                    if (duplicateButton) duplicateButton.dataset.duplicateNumber = encodeURIComponent(result.quote_number);
                     if (existingQuoteNumberInput) {
                         existingQuoteNumberInput.value = result.quote_number;
                     }
@@ -458,6 +551,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             window.open(result.pdf_url, "_blank");
+            if (!isEditMode) {
+                // Load the saved editor so subsequent saves update, rather than create a second quote.
+                window.location.replace(result.edit_url);
+            }
         } catch (error) {
             console.error("Error saving quote:", error);
             showMessage("error", error.message);
@@ -481,7 +578,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 deleteQuoteBtn.disabled = true;
                 deleteQuoteBtn.textContent = "Deleting...";
 
-                const response = await fetch(
+                const response = await quoteFetch(
                     `/delete-quote/${encodeURIComponent(currentQuoteNumber)}`,
                     { method: "DELETE" }
                 );

@@ -1,5 +1,8 @@
 # Quote Generator Tool
 
+For web deployment status, gateway limitations, and backup instructions, see
+[WEB_DEPLOYMENT.md](WEB_DEPLOYMENT.md). Desktop mode remains the default.
+
 A lightweight internal quoting application built with **Python (Flask)**
 that allows users to quickly generate professional PDF quotes,
 track quote history, and manage quote defaults.
@@ -155,17 +158,16 @@ Where:
 
 ## Data Storage
 
-The application stores all quote data locally:
+The desktop executable stores its SQLite database, attachments, customers and
+settings under `%LOCALAPPDATA%/Quote Tool/data`. Repository `data/` is used for
+ordinary source launches unless storage is explicitly configured otherwise.
 
-    data/quotes/
+The single-user web installation uses private server storage shared by laptop
+and phone browsers. It does not synchronize with the desktop executable. After
+migration, use the website for ongoing quoting to avoid divergent copies.
 
-Each quote is saved as a JSON file.
-
-A summary log is maintained in:
-
-    data/quote_log.csv
-
-This allows easy export or integration with spreadsheets.
+See [WEB_DEPLOYMENT.md](WEB_DEPLOYMENT.md) for deployment, migration and manual
+backup instructions. CSV export remains available from the application.
 
 ------------------------------------------------------------------------
 

@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script src="{{ url_for('static', filename='security.js') }}"></script>
     <title>Settings</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    {% include '_web_session.html' %}
     <div class="app-shell">
         <div class="page">
             <header class="page-header">
@@ -225,7 +228,7 @@
         </div>
     </template>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         document.addEventListener("DOMContentLoaded", () => {
             const form = document.getElementById("settingsForm");
             const messageEl = document.getElementById("settingsMessage");
@@ -284,10 +287,9 @@
                     })
                     .filter(Boolean);
 
-                defaultBranchIdSelect.innerHTML = options.map((option) => {
-                    const selected = option.value === currentValue ? "selected" : "";
-                    return `<option value="${option.value}" ${selected}>${option.label}</option>`;
-                }).join("");
+                defaultBranchIdSelect.replaceChildren(...options.map((option) =>
+                    new Option(option.label, option.value, false, option.value === currentValue)
+                ));
 
                 if (!defaultBranchIdSelect.value && options.length) {
                     defaultBranchIdSelect.value = options[0].value;
@@ -344,7 +346,7 @@
                     saveSettingsBtn.disabled = true;
                     saveSettingsBtn.textContent = "Saving Settings...";
 
-                    const response = await fetch("/api/settings", {
+                    const response = await quoteFetch("/api/settings", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json"

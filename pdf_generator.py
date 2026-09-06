@@ -1,5 +1,6 @@
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from storage_paths import private_child
 from xhtml2pdf import pisa
 from pypdf import PdfWriter
 import io
@@ -58,6 +59,7 @@ def build_quote_pdf(
     pdf_path: Path,
     settings: dict,
     logo_path: Path | None = None,
+    upload_root: Path | None = None,
 ):
     if getattr(sys, 'frozen', False):
         BUNDLE_DIR = Path(sys._MEIPASS)
@@ -74,7 +76,7 @@ def build_quote_pdf(
 
     env = FileSystemLoader(template_dir)
     # auto_reload=True ensures Jinja re-reads the file if it changes on disk
-    jinja_env = Environment(loader=env, auto_reload=True)
+    jinja_env = Environment(loader=env, auto_reload=True, autoescape=select_autoescape(["html"]))
 
     user_settings = settings.get("user", {})
     quote_settings = settings.get("quotes", {})
@@ -86,8 +88,15 @@ def build_quote_pdf(
 
     # Load and render quote HTML
     quote_template = jinja_env.get_template("quote_pdf.html")
+    # Do not even pass internal package breakdowns or costs to customer templates.
+    public_quote = dict(quote)
+    public_quote["line_items"] = [
+        {key: value for key, value in item.items()
+         if key not in {"components", "net_cost_each", "gross_margin_percent"}}
+        for item in quote.get("line_items", [])
+    ]
     quote_html = quote_template.render(
-        quote=quote,
+        quote=public_quote,
         sales_engineer_name=user_settings.get("sales_engineer_name", ""),
         sales_engineer_phone=user_settings.get("sales_engineer_phone", ""),
         sales_engineer_email=user_settings.get("sales_engineer_email", ""),
@@ -115,9 +124,9 @@ def build_quote_pdf(
 
     # Attachments
     attachments = quote.get("attachments", [])
-    upload_dir = DATA_DIR / "uploads" / quote["quote_number"]
+    upload_dir = private_child(upload_root or DATA_DIR / "uploads", quote["quote_number"])
     for attachment in attachments:
-        attachment_path = upload_dir / attachment
+        attachment_path = private_child(upload_dir, attachment)
         if attachment_path.exists():
             merger.append(str(attachment_path))
 

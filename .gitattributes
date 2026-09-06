@@ -1,0 +1,3 @@
+# CGI shebangs must not acquire CRLF on Windows checkouts.
+*.cgi text eol=lf
+*.htaccess text eol=lf

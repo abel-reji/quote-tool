@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | Quote Tool</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <main class="app-shell">
+        <section class="panel login-panel">
+            <h1>Quote Tool</h1>
+            <p class="page-subtitle">Sign in to your private quote workspace.</p>
+            {% if error %}<p class="form-message error" role="alert">{{ error }}</p>{% endif %}
+            <form method="post" action="{{ url_for('web_login') }}" class="login-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="field">
+                    <label for="login-username">Username</label>
+                    <input id="login-username" name="username" autocomplete="username" required autofocus maxlength="255">
+                </div>
+                <div class="field">
+                    <label for="login-password">Password</label>
+                    <input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="1024">
+                </div>
+                <button class="primary-button" type="submit">Sign In</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

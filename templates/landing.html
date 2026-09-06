@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script src="{{ url_for('static', filename='security.js') }}"></script>
     <title>Quote Tool Home</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    {% include '_web_session.html' %}
     <div class="app-shell">
         <div class="page dashboard-page">
             <header class="page-header dashboard-header dashboard-header-with-menu">
@@ -82,7 +85,7 @@
         </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         document.addEventListener("DOMContentLoaded", async () => {
             const listEl = document.getElementById("quoteList");
             const stateEl = document.getElementById("quoteListState");
@@ -91,6 +94,16 @@
             const headerMenu = document.getElementById("headerMenu");
 
             let quotes = [];
+
+            function escapeHtml(value) {
+                const node = document.createElement("span");
+                node.textContent = String(value ?? "");
+                return node.innerHTML;
+            }
+
+            function dispositionOf(quote) {
+                return ["won", "lost", "pending"].includes(quote.disposition) ? quote.disposition : "pending";
+            }
 
             function formatCurrency(value) {
                 const number = Number(value || 0);
@@ -108,21 +121,24 @@
                 stateEl.hidden = true;
                 listEl.hidden = false;
                 listEl.innerHTML = items.map((quote) => `
-                    <a class="quote-list-item" href="${quote.edit_url}">
+                    <div class="quote-list-entry">
+                    <a class="quote-list-item" href="/quotes/${encodeURIComponent(quote.quote_number)}/edit">
                         <div class="quote-list-main">
                             <div class="quote-list-title-row">
-                                <span class="quote-disposition-marker disposition-${quote.disposition || "pending"}" title="${(quote.disposition || "pending").charAt(0).toUpperCase() + (quote.disposition || "pending").slice(1)}"></span>
-                                <strong>${quote.quote_number}</strong>
+                                <span class="quote-disposition-marker disposition-${dispositionOf(quote)}" title="${dispositionOf(quote)}"></span>
+                                <strong>${escapeHtml(quote.quote_number)}</strong>
                             </div>
-                            <span>${quote.customer || "No customer"}</span>
-                            <span>${quote.project_description || "No project description"}</span>
+                            <span>${escapeHtml(quote.customer || "No customer")}</span>
+                            <span>${escapeHtml(quote.project_description || "No project description")}</span>
                         </div>
                         <div class="quote-list-meta">
-                            <span>${quote.date_created || ""}</span>
+                            <span>${escapeHtml(quote.date_created)}</span>
                             <strong>${formatCurrency(quote.quote_total)}</strong>
-                            <span>${quote.line_item_count} line item${quote.line_item_count === 1 ? "" : "s"}</span>
+                            <span>${Number(quote.line_item_count) || 0} line item${quote.line_item_count === 1 ? "" : "s"}</span>
                         </div>
                     </a>
+                    <button class="secondary-btn" type="button" data-duplicate-number="${encodeURIComponent(quote.quote_number)}">Duplicate Quote</button>
+                    </div>
                 `).join("");
             }
 
@@ -171,7 +187,7 @@
             searchEl.addEventListener("input", applySearch);
 
             try {
-                const response = await fetch("/api/quotes");
+                const response = await quoteFetch("/api/quotes");
                 const result = await response.json();
 
                 if (!response.ok) {
@@ -187,5 +203,6 @@
             }
         });
     </script>
+    <script src="{{ url_for('static', filename='duplication.js') }}"></script>
 </body>
 </html>

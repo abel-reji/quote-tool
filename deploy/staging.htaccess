@@ -1,0 +1,7 @@
+# Install only in the quote subdomain's public document root.
+Options +ExecCGI -Indexes -MultiViews
+AddHandler cgi-script .cgi
+RewriteEngine On
+RewriteRule ^staging\.cgi(?:/|$) - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ staging.cgi/$1 [QSA,L]
