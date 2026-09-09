@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -110,6 +111,45 @@ class WebModeTests(unittest.TestCase):
         self.assertEqual(self.client.get("/login", base_url="https://evil.example").status_code, 400)
         self.assertEqual(self.client.get("/login", base_url="http://quotes.example.test",
                          headers={"X-Forwarded-Proto": "https"}).status_code, 400)
+
+    def test_browser_navigation_redirects_without_relying_on_accept_ranking(self):
+        for path in ("/", "/quote-tool", "/settings", "/generate-pdf/test", "/api/quotes"):
+            for accept in ("*/*", "application/json", "application/xhtml+xml,text/html;q=0.9"):
+                with self.subTest(path=path, accept=accept):
+                    response = self.request(path, headers={"Sec-Fetch-Mode": "navigate", "Accept": accept})
+                    self.assertEqual(response.status_code, 302)
+                    self.assertEqual(response.location, "/login")
+                    self.assertEqual(response.headers["Cache-Control"], "no-store")
+        response = self.request("/", "HEAD", headers={"Sec-Fetch-Mode": "navigate"})
+        self.assertEqual(response.location, "/login")
+        self.assertEqual(self.request("/login", headers={"Sec-Fetch-Mode": "navigate"}).status_code, 200)
+
+    def test_older_browser_html_fallback_and_background_requests(self):
+        response = self.request("/", headers={"Accept": "application/xhtml+xml,text/html;q=0.9,*/*;q=0.8"})
+        self.assertEqual(response.location, "/login")
+        for headers in ({"Accept": "*/*"}, {"Accept": "application/json,text/html;q=0.5"},
+                        {"Accept": "text/html", "Sec-Fetch-Mode": "cors"},
+                        {"Accept": "text/html", "X-Requested-With": "XMLHttpRequest"}):
+            with self.subTest(headers=headers):
+                response = self.request("/api/quotes", headers=headers)
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.json["message"], "Please sign in again.")
+                self.assertNotIn("Location", response.headers)
+        self.assertEqual(self.request("/save-quote", "POST", json=self.payload(),
+                         headers={"Sec-Fetch-Mode": "navigate", "Accept": "text/html"}).status_code, 401)
+
+    def test_expired_signed_session_redirects_pages_but_rejects_background_saves(self):
+        expired_time = time.time() - 9 * 3600
+        with patch("itsdangerous.timed.time.time", return_value=expired_time):
+            token = self.login()
+        response = self.request("/", headers={"Sec-Fetch-Mode": "navigate", "Accept": "*/*"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/login")
+        response = self.request("/save-quote", "POST", json=self.payload(),
+                                headers={"X-CSRF-Token": token, "Sec-Fetch-Mode": "cors"})
+        self.assertEqual(response.status_code, 401)
+        with self.app.app_context():
+            self.assertEqual(self.module.Quote.query.count(), 0)
 
     def test_login_csrf_and_session_rotation(self):
         old_token = self.token()
@@ -221,6 +261,69 @@ class WebModeTests(unittest.TestCase):
         single = self.module.calculate_line_item({"item_name": "Round", "quantity": 3, "net_cost_each": 0, "sell_price_each": "1.005"})
         self.assertEqual(single["sell_price_each"], 1.01)
         self.assertEqual(single["line_total"], 3.03)
+
+    def test_disposition_only_update_preserves_quote_and_files_without_pdf(self):
+        token = self.login()
+        for entry_type in ("app", "p21"):
+            number = self.save(token, self.payload(entry_type=entry_type, quote_number="P21-STATUS",
+                                                  date_created="2024-01-02", line_items=[self.package()]))
+            folder = self.module.UPLOAD_DIR / number
+            folder.mkdir()
+            self.addCleanup(folder.rmdir)
+            attachment = folder / "annex.pdf"
+            attachment.write_bytes(b"unchanged attachment fixture")
+            self.addCleanup(attachment.unlink)
+            with self.app.app_context():
+                quote = self.module.Quote.query.filter_by(quote_number=number).first()
+                quote.attachments.append(self.module.Attachment(filename="annex.pdf"))
+                self.module.db.session.commit()
+            original = self.request(f"/api/quotes/{number}").json["quote"]
+            settings = self.module.SETTINGS_FILE.read_bytes()
+            for disposition in ("won", "lost", "pending"):
+                with patch.object(self.module, "build_quote_pdf") as generate:
+                    response = self.request(f"/api/quotes/{number}/disposition", "PATCH",
+                                            json={"disposition": disposition}, headers={"X-CSRF-Token": token})
+                    self.assertEqual(response.status_code, 200, response.data)
+                    generate.assert_not_called()
+                self.assertNotIn("pdf_url", response.json)
+                expected = dict(original, disposition=disposition)
+                self.assertEqual(self.request(f"/api/quotes/{number}").json["quote"], expected)
+                self.assertEqual(attachment.read_bytes(), b"unchanged attachment fixture")
+                self.assertEqual(self.module.SETTINGS_FILE.read_bytes(), settings)
+                log = self.request("/api/quotes").json["quotes"]
+                self.assertEqual(next(q for q in log if q["quote_number"] == number)["disposition"], disposition)
+
+    def test_disposition_requires_auth_csrf_and_strict_payload(self):
+        path = "/api/quotes/test/disposition"
+        self.assertEqual(self.request(path, "PATCH", json={"disposition": "won"}).status_code, 401)
+        token = self.login()
+        number = self.save(token)
+        path = f"/api/quotes/{number}/disposition"
+        self.assertEqual(self.request(path, "PATCH", json={"disposition": "won"}).status_code, 400)
+        for payload in ({}, [], {"disposition": None}, {"disposition": []}, {"disposition": "invalid"},
+                        {"disposition": "won", "customer": "must not change"}):
+            response = self.request(path, "PATCH", json=payload, headers={"X-CSRF-Token": token})
+            self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(self.request("/api/quotes/missing/disposition", "PATCH", json={"disposition": "won"},
+                         headers={"X-CSRF-Token": token}).status_code, 404)
+        self.assertEqual(self.request(f"/api/quotes/{number}").json["quote"]["disposition"], "pending")
+
+    def test_disposition_commit_failure_rolls_back(self):
+        token = self.login()
+        number = self.save(token)
+        with patch.object(self.module.db.session, "commit", side_effect=RuntimeError("synthetic failure")):
+            response = self.request(f"/api/quotes/{number}/disposition", "PATCH", json={"disposition": "won"},
+                                    headers={"X-CSRF-Token": token})
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(self.request(f"/api/quotes/{number}").json["quote"]["disposition"], "pending")
+
+    def test_disposition_button_only_appears_on_saved_quotes(self):
+        token = self.login()
+        number = self.save(token)
+        marker = b'id="updateDispositionBtn"'
+        self.assertIn(marker, self.request(f"/quotes/{number}/edit").data)
+        self.assertNotIn(marker, self.request("/quote-tool").data)
+        self.assertNotIn(marker, self.request("/p21-quote").data)
 
     def test_duplicate_copies_package_and_resets_metadata(self):
         from datetime import datetime

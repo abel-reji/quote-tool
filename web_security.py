@@ -78,6 +78,20 @@ def install_web_security(app, config):
     def logged_in():
         return hmac.compare_digest(str(session.get("account", "")), account_tag)
 
+    def browser_navigation():
+        if request.method not in {"GET", "HEAD"}:
+            return False
+        mode = request.headers.get("Sec-Fetch-Mode")
+        if mode:
+            return mode == "navigate"
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return False
+        # Compare HTML with JSON, not unrelated browser formats such as XHTML.
+        accepts_html = any(kind == "text/html" and quality > 0
+                           for kind, quality in request.accept_mimetypes)
+        return accepts_html and request.accept_mimetypes.best_match(
+            ("text/html", "application/json")) == "text/html"
+
     def reserve_login_attempt():
         # Account-wide throttling persists across CGI workers; no trust in client IP headers.
         with closing(sqlite3.connect(throttle_path, timeout=10)) as conn, conn:
@@ -97,7 +111,7 @@ def install_web_security(app, config):
         if not request.is_secure:
             return jsonify(status="error", message="HTTPS is required."), 400
         if request.endpoint not in {"web_login", "static"} and not logged_in():
-            if request.method in {"GET", "HEAD"} and request.accept_mimetypes.best == "text/html":
+            if browser_navigation():
                 return redirect(url_for("web_login"))
             return jsonify(status="error", message="Please sign in again."), 401
         if request.method not in {"GET", "HEAD", "OPTIONS"}:

@@ -167,7 +167,14 @@
                 <input type="radio" name="disposition" value="lost" {% if current_disposition == 'lost' %}checked{% endif %}>
                 <span>Lost</span>
             </label>
+            {% if edit_mode and quote %}
+            <button type="button" class="secondary-btn" id="updateDispositionBtn">Update Disposition</button>
+            {% endif %}
         </div>
+        {% if edit_mode and quote %}
+        <p class="field-help">Saves only the disposition. Other edits stay unsaved; no PDF is opened.</p>
+        <div id="dispositionMessage" class="form-message" role="status" aria-live="polite" hidden></div>
+        {% endif %}
     </div>
 </div>
                 </section>
@@ -327,5 +334,6 @@
     </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
     <script src="{{ url_for('static', filename='duplication.js') }}"></script>
+    <script src="{{ url_for('static', filename='disposition.js') }}"></script>
 </body>
 </html>

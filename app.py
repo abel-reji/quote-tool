@@ -1009,6 +1009,27 @@ def update_quote(quote_number):
         return jsonify({"status": "error", "message": f"Unexpected error: {str(e)}"}), 500
 
 
+@app.patch("/api/quotes/<quote_number>/disposition")
+def update_disposition(quote_number):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or set(data) != {"disposition"}:
+        return jsonify(status="error", message="Send only the disposition to update."), 400
+    disposition = data["disposition"]
+    if not isinstance(disposition, str) or disposition not in {"pending", "won", "lost"}:
+        return jsonify(status="error", message="Disposition must be Pending, Won, or Lost."), 400
+    try:
+        quote = Quote.query.filter_by(quote_number=quote_number).first()
+        if quote is None:
+            return jsonify(status="error", message="Quote not found."), 404
+        quote.disposition = disposition
+        db.session.commit()
+        return jsonify(status="success", quote_number=quote.quote_number, disposition=disposition)
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Disposition update failed")
+        return jsonify(status="error", message="Could not update disposition. Please try again."), 500
+
+
 @app.post("/api/quotes/<quote_number>/duplicate")
 def duplicate_quote(quote_number):
     created_folder = None

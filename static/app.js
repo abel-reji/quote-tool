@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const lineItemTemplate = document.getElementById("lineItemTemplate");
     const formMessage = document.getElementById("formMessage");
     const saveQuoteBtn = document.getElementById("saveQuoteBtn");
+    const updateDispositionBtn = document.getElementById("updateDispositionBtn");
     const deleteQuoteBtn = document.getElementById("deleteQuoteBtn");
     const existingQuoteNumberInput = document.getElementById("existingQuoteNumber");
     const editableQuoteNumberInput = document.getElementById("quoteNumber");
@@ -449,6 +450,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (saveQuoteBtn.disabled) return;
         clearMessage();
 
         try {
@@ -505,6 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const method = isEditMode ? "PUT" : "POST";
 
             saveQuoteBtn.disabled = true;
+            if (updateDispositionBtn) updateDispositionBtn.disabled = true;
             saveQuoteBtn.textContent = isEditMode ? "Updating Quote..." : "Saving Quote...";
 
             const response = await quoteFetch(endpoint, {
@@ -560,6 +563,7 @@ document.addEventListener("DOMContentLoaded", () => {
             showMessage("error", error.message);
         } finally {
             saveQuoteBtn.disabled = false;
+            if (updateDispositionBtn) updateDispositionBtn.disabled = false;
             saveQuoteBtn.textContent = isEditMode ? "Update Quote & Open PDF" : "Save Quote & Open PDF";
         }
     });
@@ -576,6 +580,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             try {
                 deleteQuoteBtn.disabled = true;
+                if (updateDispositionBtn) updateDispositionBtn.disabled = true;
                 deleteQuoteBtn.textContent = "Deleting...";
 
                 const response = await quoteFetch(
@@ -595,6 +600,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.error("Error deleting quote:", error);
                 showMessage("error", error.message);
                 deleteQuoteBtn.disabled = false;
+                if (updateDispositionBtn) updateDispositionBtn.disabled = false;
                 deleteQuoteBtn.textContent = "Delete Quote";
             }
         });

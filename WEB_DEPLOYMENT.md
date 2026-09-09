@@ -124,6 +124,13 @@ Run a backup after important changes. Recover to a new private directory using
 
 ## Duplication and packages
 
+Saved quote editors also provide **Update Disposition** beside Pending/Won/Lost.
+It sends a dedicated authenticated, CSRF-protected PATCH that changes only that
+field. It does not validate/save other form edits, generate a PDF, or navigate
+away. It uses the saved quote number even if the visible number has unsaved edits.
+New quotes must be saved first. The ordinary Update Quote & Open PDF workflow
+remains available for all other quote edits.
+
 The feature update is deployed with 30 passing tests on both Windows and Bluehost.
 The pre-feature server backup is
 `/home3/finvestc/quote-tool-private/pre-features-20260905-222744`.
