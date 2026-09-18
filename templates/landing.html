@@ -10,6 +10,14 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    <svg xmlns="http://www.w3.org/2000/svg" class="quote-icon-sprite" aria-hidden="true">
+        <symbol id="qi-all" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+        <symbol id="qi-pending" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+        <symbol id="qi-won" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+        <symbol id="qi-lost" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></symbol>
+        <symbol id="qi-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+        <symbol id="qi-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    </svg>
     {% include '_web_session.html' %}
     <div class="app-shell">
         <div class="page dashboard-page">
@@ -49,20 +57,11 @@
             </header>
 
             <div class="dashboard-grid">
-                <section class="panel dashboard-card action-card">
-                    <div class="panel-heading">
-                        <div>
-                            <h2>Create a New Quote</h2>
-                            <p class="section-subtitle">Open the quote form and generate a new PDF.</p>
-                        </div>
-                    </div>
-
-                    <div class="action-card-body">
-                        <p class="dashboard-copy">
-                            Start a fresh quote, add line items, calculate pricing, and save directly to the quote log.
-                        </p>
-                        <a href="/quote-tool" class="primary-button">Open Quoting Tool</a>
-                        <a href="/p21-quote" class="secondary-btn button-link" style="margin-top: 0.75rem;">Enter P21 Quote</a>
+                <section class="panel dashboard-card quick-create-card">
+                    <h2>Create a quote</h2>
+                    <div class="quick-create-actions">
+                        <a href="/quote-tool" class="primary-button">+ New Quote</a>
+                        <a href="/p21-quote" class="secondary-btn button-link">Enter P21 Quote</a>
                     </div>
                 </section>
 
@@ -77,10 +76,28 @@
 
                     <div class="quote-list-toolbar">
                         <input type="text" id="quoteSearch" placeholder="Search by quote #, customer, or project">
+                        <div id="dispositionFilter" class="quote-filter-tabs" role="group" aria-label="Filter quotes by disposition">
+                            {% for status, label in [('all', 'All'), ('pending', 'Pending'), ('won', 'Won'), ('lost', 'Lost')] %}
+                            <button type="button" class="quote-filter-tab status-{{ status }}" data-filter="{{ status }}" aria-pressed="{{ 'true' if status == 'all' else 'false' }}">
+                                <svg class="quote-ui-icon" aria-hidden="true"><use href="#qi-{{ status }}"></use></svg>{{ label }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div id="quickDispositionFeedback" class="quote-feedback" hidden>
+                        <span id="quickDispositionMessage" role="status" aria-live="polite"></span>
+                        <button id="dismissDispositionFeedback" type="button" aria-label="Dismiss status notification">&times;</button>
                     </div>
 
                     <div id="quoteListState" class="dashboard-copy">Loading quotes...</div>
                     <div id="quoteList" class="quote-list" hidden></div>
+                    <nav id="quotePagination" class="quote-pagination" aria-label="Quote list pages" hidden>
+                        <p id="quotePageStatus" role="status" aria-live="polite"></p>
+                        <div class="quote-page-buttons">
+                            <button id="quotePreviousPage" type="button" class="secondary-btn">Previous</button>
+                            <button id="quoteNextPage" type="button" class="secondary-btn">Next</button>
+                        </div>
+                    </nav>
                 </section>
             </div>
         </div>
@@ -93,8 +110,31 @@
             const searchEl = document.getElementById("quoteSearch");
             const menuToggle = document.getElementById("menuToggle");
             const headerMenu = document.getElementById("headerMenu");
+            const pagination = document.getElementById("quotePagination");
+            const pageStatus = document.getElementById("quotePageStatus");
+            const previousPage = document.getElementById("quotePreviousPage");
+            const nextPage = document.getElementById("quoteNextPage");
+            const dispositionFilter = document.getElementById("dispositionFilter");
+            const dispositionMessage = document.getElementById("quickDispositionMessage");
+            const feedback = document.getElementById("quickDispositionFeedback");
+            let feedbackTimer;
+            function showFeedback(message, kind) {
+                clearTimeout(feedbackTimer);
+                dispositionMessage.textContent = message;
+                feedback.className = `quote-feedback feedback-${kind}`;
+                feedback.hidden = false;
+                if (kind === "success") feedbackTimer = setTimeout(() => { feedback.hidden = true; }, 4000);
+            }
+            document.getElementById("dismissDispositionFeedback").addEventListener("click", () => {
+                clearTimeout(feedbackTimer);
+                feedback.hidden = true;
+            });
+            const updating = new Set();
+            let currentDisposition = "all";
 
             let quotes = [];
+            let currentPage = 1;
+            const pageSize = 25;
 
             function escapeHtml(value) {
                 const node = document.createElement("span");
@@ -106,12 +146,32 @@
                 return ["won", "lost", "pending"].includes(quote.disposition) ? quote.disposition : "pending";
             }
 
+            function icon(name) {
+                return `<svg class="quote-ui-icon" aria-hidden="true"><use href="#qi-${name}"></use></svg>`;
+            }
+
             function formatCurrency(value) {
                 const number = Number(value || 0);
                 return `$${number.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
             }
 
+            function formatDate(value) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return value || "Date not set";
+                const date = new Date(`${value}T00:00:00Z`);
+                if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) return value;
+                return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+            }
+
             function renderQuotes(items) {
+                const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+                currentPage = Math.min(currentPage, pageCount);
+                const start = (currentPage - 1) * pageSize;
+                pagination.hidden = !items.length;
+                previousPage.disabled = currentPage === 1;
+                nextPage.disabled = currentPage === pageCount;
+                pageStatus.textContent = items.length
+                    ? `Showing ${start + 1}-${Math.min(start + pageSize, items.length)} of ${items.length} quotes (page ${currentPage} of ${pageCount})`
+                    : "No quotes found.";
                 if (!items.length) {
                     listEl.hidden = true;
                     stateEl.hidden = false;
@@ -121,37 +181,39 @@
 
                 stateEl.hidden = true;
                 listEl.hidden = false;
-                listEl.innerHTML = items.map((quote) => `
+                listEl.innerHTML = items.slice(start, start + pageSize).map((quote) => `
                     <div class="quote-list-entry">
                     <a class="quote-list-item" href="/quotes/${encodeURIComponent(quote.quote_number)}/edit">
                         <div class="quote-list-main">
-                            <div class="quote-list-title-row">
-                                <span class="quote-disposition-marker disposition-${dispositionOf(quote)}" title="${dispositionOf(quote)}"></span>
-                                <strong>${escapeHtml(quote.quote_number)}</strong>
-                            </div>
-                            <span>${escapeHtml(quote.customer || "No customer")}</span>
-                            <span>${escapeHtml(quote.project_description || "No project description")}</span>
+                            <strong class="quote-customer-name">${escapeHtml(quote.customer || "No customer")}</strong>
+                            <span class="quote-project-name">${escapeHtml(quote.project_description || "No project description")}</span>
+                            <span class="quote-reference">${escapeHtml(quote.quote_number)}</span>
                         </div>
                         <div class="quote-list-meta">
-                            <span>${escapeHtml(quote.date_created)}</span>
-                            <strong>${formatCurrency(quote.quote_total)}</strong>
+                            <strong class="quote-card-total">${formatCurrency(quote.quote_total)}</strong>
+                            <span>${escapeHtml(formatDate(quote.date_created))}</span>
                             <span>${Number(quote.line_item_count) || 0} line item${quote.line_item_count === 1 ? "" : "s"}</span>
                         </div>
                     </a>
-                    <button class="secondary-btn" type="button" data-duplicate-number="${encodeURIComponent(quote.quote_number)}">Duplicate Quote</button>
+                    <div class="quote-card-actions">
+                    <label class="quote-status-pill status-${dispositionOf(quote)}" title="Change status (saves immediately)">
+                        ${icon(dispositionOf(quote))}
+                        <select aria-label="Disposition for ${escapeHtml(quote.quote_number)}" data-status-number="${encodeURIComponent(quote.quote_number)}" ${updating.has(quote.quote_number) ? "disabled" : ""}>
+                            ${["pending", "won", "lost"].map((status) => `<option value="${status}" ${dispositionOf(quote) === status ? "selected" : ""}>${status[0].toUpperCase() + status.slice(1)}</option>`).join("")}
+                        </select>
+                        ${icon("chevron")}
+                    </label>
+                    <button class="quote-copy-btn" type="button" title="Duplicate quote" aria-label="Duplicate quote ${escapeHtml(quote.quote_number)}" data-duplicate-number="${encodeURIComponent(quote.quote_number)}">${icon("copy")}<span>Duplicate</span></button>
+                    </div>
                     </div>
                 `).join("");
             }
 
             function applySearch() {
                 const term = searchEl.value.trim().toLowerCase();
-                if (!term) {
-                    renderQuotes(quotes);
-                    return;
-                }
-
                 const filtered = quotes.filter((quote) => {
-                    return [quote.quote_number, quote.customer, quote.project_description]
+                    if (currentDisposition !== "all" && dispositionOf(quote) !== currentDisposition) return false;
+                    return !term || [quote.quote_number, quote.customer, quote.project_description]
                         .filter(Boolean)
                         .some((value) => value.toLowerCase().includes(term));
                 });
@@ -185,7 +247,64 @@
                 }
             });
 
-            searchEl.addEventListener("input", applySearch);
+            searchEl.addEventListener("input", () => {
+                currentPage = 1;
+                applySearch();
+            });
+            dispositionFilter.addEventListener("click", (event) => {
+                const button = event.target.closest("button[data-filter]");
+                if (!button) return;
+                currentDisposition = button.dataset.filter;
+                dispositionFilter.querySelectorAll("button[data-filter]").forEach((item) => {
+                    item.setAttribute("aria-pressed", String(item.dataset.filter === currentDisposition));
+                });
+                currentPage = 1;
+                applySearch();
+            });
+            listEl.addEventListener("change", async (event) => {
+                const select = event.target.closest("select[data-status-number]");
+                if (!select) return;
+                const number = decodeURIComponent(select.dataset.statusNumber);
+                const quote = quotes.find((item) => item.quote_number === number);
+                const disposition = select.value;
+                if (!quote || updating.has(number) || disposition === dispositionOf(quote)) return;
+                updating.add(number);
+                select.disabled = true;
+                showFeedback(`Updating ${number}...`, "saving");
+                try {
+                    const response = await quoteFetch(`/api/quotes/${encodeURIComponent(number)}/disposition`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ disposition }),
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || "Could not update disposition.");
+                    quote.disposition = result.disposition;
+                    showFeedback(`${number} updated to ${result.disposition}.`, "success");
+                } catch (error) {
+                    showFeedback(error.message || "Could not update disposition. Please try again.", "error");
+                } finally {
+                    updating.delete(number);
+                    const restoreFocus = document.activeElement === select;
+                    applySearch();
+                    if (restoreFocus) {
+                        const replacement = listEl.querySelector(`select[data-status-number="${encodeURIComponent(number)}"]`);
+                        (replacement || dispositionFilter.querySelector('[aria-pressed="true"]')).focus();
+                    }
+                }
+            });
+            previousPage.addEventListener("click", () => {
+                if (previousPage.disabled) return;
+                currentPage -= 1;
+                applySearch();
+                searchEl.scrollIntoView({ block: "start" });
+            });
+            nextPage.addEventListener("click", () => {
+                if (nextPage.disabled) return;
+                currentPage += 1;
+                applySearch();
+                searchEl.scrollIntoView({ block: "start" });
+            });
 
             try {
                 const response = await quoteFetch("/api/quotes");
@@ -196,7 +315,7 @@
                 }
 
                 quotes = result.quotes || [];
-                renderQuotes(quotes);
+                applySearch();
             } catch (error) {
                 stateEl.hidden = false;
                 listEl.hidden = true;

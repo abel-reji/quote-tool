@@ -9,7 +9,7 @@
     <title>{% if edit_mode %}Edit Quote{% else %}Quote Tool{% endif %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
-<body>
+<body class="quote-editor-page">
     {% include '_web_session.html' %}
     <div class="app-shell">
         <div class="page">
@@ -226,9 +226,12 @@
 		    <button type="button" class="secondary-btn delete-btn" id="deleteQuoteBtn">Delete Quote</button>
 		    {% endif %}
 
+                    <div class="quote-save-bar">
+                    <div class="mobile-quote-total"><span>Quote total</span><strong id="mobileQuoteTotal">$0.00</strong></div>
                     <button type="submit" class="primary-btn" id="saveQuoteBtn">
                         {% if edit_mode %}Update Quote & Open PDF{% else %}Save Quote & Open PDF{% endif %}
                     </button>
+                    </div>
                 </div>
             </form>
         </div>

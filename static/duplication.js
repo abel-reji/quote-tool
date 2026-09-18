@@ -4,7 +4,7 @@ document.addEventListener("click", async (event) => {
     const number = decodeURIComponent(button.dataset.duplicateNumber);
     if (!window.confirm(`Duplicate saved quote ${number}? The copy gets a new number, today's date, and Pending status. Unsaved edits are not included.`)) return;
     button.disabled = true;
-    const label = button.textContent;
+    const label = [...button.childNodes].map((node) => node.cloneNode(true));
     button.textContent = "Duplicating...";
     try {
         const response = await quoteFetch(`/api/quotes/${encodeURIComponent(number)}/duplicate`, {method: "POST"});
@@ -14,6 +14,6 @@ document.addEventListener("click", async (event) => {
     } catch (error) {
         window.alert(error.message || "Unable to duplicate quote.");
         button.disabled = false;
-        button.textContent = label;
+        button.replaceChildren(...label);
     }
 });

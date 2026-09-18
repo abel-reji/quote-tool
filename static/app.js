@@ -109,6 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         quoteTotalEl.textContent = formatCurrency(total);
+        document.getElementById("mobileQuoteTotal").textContent = formatCurrency(total);
     }
 
     function updateSellPriceFromMargin(row) {
