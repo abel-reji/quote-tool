@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% include '_favicon.html' %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="{{ url_for('static', filename='security.js') }}"></script>
     <title>{% if edit_mode %}Edit Quote{% else %}Quote Tool{% endif %}</title>
@@ -315,10 +316,10 @@
                 <label>Quantity per Package<input class="component-quantity" type="number" min="1" step="1" value="1" required></label>
             </div>
             <div class="field">
-                <label>Cost Each<input class="component-cost" type="number" min="0" step="0.01" value="0" inputmode="decimal" required></label>
+                <label>Cost Each<input class="component-cost" type="text" value="$0.00" inputmode="decimal" required></label>
             </div>
             <div class="field">
-                <label>Sell Price Each<input class="component-sell" type="number" min="0" step="0.01" value="0" inputmode="decimal" required></label>
+                <label>Sell Price Each<input class="component-sell" type="text" value="$0.00" inputmode="decimal" required></label>
             </div>
             <button type="button" class="remove-component-btn secondary-btn">Remove Component</button>
         </div>
@@ -333,6 +334,7 @@
         };
     </script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='customer-suggestions.js') }}"></script>
     <script src="{{ url_for('static', filename='duplication.js') }}"></script>
     <script src="{{ url_for('static', filename='disposition.js') }}"></script>
 </body>

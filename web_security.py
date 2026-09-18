@@ -110,7 +110,7 @@ def install_web_security(app, config):
             raise request.routing_exception
         if not request.is_secure:
             return jsonify(status="error", message="HTTPS is required."), 400
-        if request.endpoint not in {"web_login", "static"} and not logged_in():
+        if request.endpoint not in {"web_login", "static", "favicon"} and not logged_in():
             if browser_navigation():
                 return redirect(url_for("web_login"))
             return jsonify(status="error", message="Please sign in again."), 401

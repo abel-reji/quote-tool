@@ -172,7 +172,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    function attachCurrencyFieldBehavior(input, onInputCallback) {
+    function attachCurrencyFieldBehavior(input, onInputCallback, keepZero = false) {
         input.addEventListener("focus", () => {
             input.value = input.value.replace(/[^0-9.-]/g, "");
         });
@@ -185,7 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         input.addEventListener("blur", () => {
             const numericValue = parseNumericValue(input.value);
-            if (input.value.trim() === "" || numericValue === 0) {
+            if (!keepZero && (input.value.trim() === "" || numericValue === 0)) {
                 input.value = "";
             } else {
                 input.value = formatCurrency(numericValue);
@@ -197,8 +197,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const component = componentTemplate.content.firstElementChild.cloneNode(true);
         component.querySelector(".component-name").value = item.item_name || "";
         component.querySelector(".component-quantity").value = item.quantity ?? 1;
-        component.querySelector(".component-cost").value = item.net_cost_each ?? 0;
-        component.querySelector(".component-sell").value = item.sell_price_each ?? 0;
+        for (const [selector, value] of [[".component-cost", item.net_cost_each], [".component-sell", item.sell_price_each]]) {
+            const input = component.querySelector(selector);
+            input.value = formatCurrency(value ?? 0);
+            attachCurrencyFieldBehavior(input, updateQuoteTotal, true);
+        }
         component.querySelector(".remove-component-btn").addEventListener("click", () => {
             component.remove();
             updateQuoteTotal();

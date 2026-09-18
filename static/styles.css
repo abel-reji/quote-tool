@@ -766,3 +766,19 @@ input[type="number"] {
         font-size: 1.8rem;
     }
 }
+
+.suggestion-field { position: relative; min-width: 0; }
+.customer-suggestions {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+    max-height: 220px; overflow-y: auto; overscroll-behavior: contain;
+    border: 1px solid var(--panel-border); border-radius: 12px;
+    background: var(--panel); box-shadow: var(--shadow);
+}
+.customer-suggestions[hidden] { display: none; }
+.customer-suggestions button {
+    display: block; width: 100%; min-height: 48px; padding: 12px 14px;
+    border: 0; background: transparent; color: var(--text);
+    font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer;
+}
+.customer-suggestions button:hover,
+.customer-suggestions button[aria-selected="true"] { background: var(--secondary-bg); }

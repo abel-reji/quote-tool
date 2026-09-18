@@ -106,9 +106,43 @@ class WebModeTests(unittest.TestCase):
         self.assertEqual(self.request("/", headers={"Accept": "text/html"}).location, "/login")
         self.assertEqual(self.request("/save-quote", "POST", json=self.payload()).status_code, 401)
 
+    def test_favicon_is_available_before_login_and_has_small_icon_sizes(self):
+        from PIL import Image
+        response = self.request("/favicon.ico")
+        self.addCleanup(response.close)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/vnd.microsoft.icon")
+        with Image.open(io.BytesIO(response.data)) as icon:
+            self.assertEqual(icon.ico.sizes(), {(16, 16), (32, 32), (48, 48)})
+        response = self.request("/static/icons/quote.svg")
+        self.addCleanup(response.close)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/svg+xml")
+        self.assertEqual(self.request("/api/quotes").status_code, 401)
+
+    def test_all_app_pages_reference_the_versioned_quote_icon(self):
+        marker = b'/static/icons/quote.svg?v=20260909'
+        self.assertIn(marker, self.request("/login").data)
+        token = self.login()
+        number = self.save(token)
+        for path in ("/", "/quote-tool", "/p21-quote", "/settings", f"/quotes/{number}/edit"):
+            with self.subTest(path=path):
+                self.assertIn(marker, self.request(path).data)
+
     def test_https_and_host_are_enforced(self):
         self.assertEqual(self.client.get("/login", base_url="http://quotes.example.test").status_code, 400)
         self.assertEqual(self.client.get("/login", base_url="https://evil.example").status_code, 400)
+
+    def test_customer_suggestions_are_private_and_deduplicated(self):
+        self.assertEqual(self.request("/api/customer-suggestions").status_code, 401)
+        token = self.login()
+        payload = self.payload(customer_contact="Test Contact", customer_email="test@example.test")
+        self.save(token, payload)
+        self.save(token, payload)
+        response = self.request("/api/customer-suggestions")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, [{"customer": "Synthetic Customer", "contact": "Test Contact", "email": "test@example.test"}])
+        self.assertIn("no-store", response.headers["Cache-Control"])
         self.assertEqual(self.client.get("/login", base_url="http://quotes.example.test",
                          headers={"X-Forwarded-Proto": "https"}).status_code, 400)
 
@@ -539,6 +573,9 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(client.get("/").status_code, 200)
                 self.assertEqual(client.get("/api/quotes").status_code, 200)
                 self.assertEqual(client.get("/login").status_code, 404)
+                icon_response = client.get("/favicon.ico")
+                self.assertEqual(icon_response.status_code, 200)
+                icon_response.close()
                 self.assertEqual(module.DATA_DIR, Path(folder) / "data")
                 with module.app.app_context():
                     module.db.session.remove()

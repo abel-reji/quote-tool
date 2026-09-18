@@ -356,6 +356,29 @@ def landing_page():
     return render_template("landing.html")
 
 
+@app.get("/favicon.ico")
+def favicon():
+    return send_file(Path(STATIC_PATH) / "icons" / "favicon.ico", mimetype="image/vnd.microsoft.icon")
+
+
+@app.get("/api/customer-suggestions")
+def customer_suggestions():
+    records, seen = [], set()
+    rows = db.session.query(Quote.customer, Quote.customer_contact, Quote.customer_email).order_by(Quote.id.desc()).all()
+    for row in rows:
+        values = tuple((value or "").strip() for value in row)
+        key = tuple(value.casefold() for value in values)
+        if values[0] and key not in seen:
+            seen.add(key)
+            records.append(dict(zip(("customer", "contact", "email"), values)))
+    known = {record["customer"].casefold() for record in records}
+    for customer in load_customers():
+        if customer.casefold() not in known:
+            known.add(customer.casefold())
+            records.append({"customer": customer, "contact": "", "email": ""})
+    return jsonify(records)
+
+
 @app.route("/quote-tool")
 def quote_tool():
     settings = load_settings()

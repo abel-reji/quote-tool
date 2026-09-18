@@ -50,7 +50,7 @@ def install_storage_lock(app, root):
 
     @app.before_request
     def acquire_storage():
-        if request.endpoint in {"static", "web_login", "web_logout"}:
+        if request.endpoint in {"static", "favicon", "web_login", "web_logout"}:
             return None
         lock = storage_lock(root)
         try:
